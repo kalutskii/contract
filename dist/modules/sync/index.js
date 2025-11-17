@@ -4,7 +4,7 @@ import prompts from "prompts";
 
 // src/config/config.defaults.ts
 var defaultConfig = {
-  $schema: "https://raw.githubusercontent.com/kaluckii/contract/refs/heads/main/static/contract.schema.json",
+  $schema: "https://raw.githubusercontent.com/kalutskii/contract/refs/heads/main/static/contract.schema.json",
   appName: "your-app",
   externalSources: [],
   contracts: []

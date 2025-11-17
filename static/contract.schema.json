@@ -14,7 +14,7 @@
     },
     "externalSources": {
       "type": "array",
-      "description": "Paths to external contract endpoints (bun (hono) endpoints preferred).",
+      "description": "Paths to external contract endpoints (bun (hono) routes preferred).",
       "items": {
         "type": "string"
       },

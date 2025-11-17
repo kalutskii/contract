@@ -6,7 +6,7 @@ import { cac } from 'cac';
 import fs from 'fs-extra';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-export const commandList = ['init', 'build', 'sync', 'endpoint'] as const;
+export const commandList = ['init', 'build', 'sync', 'create-routes'] as const;
 
 async function runModule(command: string, options: Record<string, any>) {
   // Checks if the command is valid and exists in the command list.

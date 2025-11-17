@@ -6,7 +6,7 @@ import { fileURLToPath } from "url";
 import { cac } from "cac";
 import fs from "fs-extra";
 var __dirname = dirname(fileURLToPath(import.meta.url));
-var commandList = ["init", "build", "sync", "endpoint"];
+var commandList = ["init", "build", "sync", "create-routes"];
 async function runModule(command, options) {
   const modulePath = join(__dirname, "modules", command, "index.js");
   if (!await fs.pathExists(modulePath)) {

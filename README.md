@@ -16,9 +16,9 @@ Builds runtime contracts from source files into `contract/export/` directory. Us
 
 Synchronizes contracts with external sources. Downloads contracts via HTTP and saves them to `contract/synced/` directory.
 
-### `contract endpoint`
+### `contract create-routes`
 
-Generates endpoint files based on contracts. Interactively prompts for file placement path.
+Generates hono routes files based on contracts. Interactively prompts for file placement path.
 
 ## Options
 
