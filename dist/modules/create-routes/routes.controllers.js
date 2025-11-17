@@ -1,4 +1,4 @@
-// src/modules/routes/routes.controllers.ts
+// src/modules/create-routes/routes.controllers.ts
 import prompts from "prompts";
 async function askWhereToWriteRoutes() {
   const response = await prompts({

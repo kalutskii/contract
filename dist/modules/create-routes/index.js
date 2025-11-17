@@ -1,4 +1,4 @@
-// src/modules/routes/index.ts
+// src/modules/create-routes/index.ts
 import fs2 from "fs-extra";
 
 // src/config/config.controllers.ts
@@ -53,7 +53,7 @@ async function readConfigFile() {
   return parsedContent.data;
 }
 
-// src/modules/routes/routes.controllers.ts
+// src/modules/create-routes/routes.controllers.ts
 import prompts2 from "prompts";
 async function askWhereToWriteRoutes() {
   const response = await prompts2({
@@ -65,7 +65,7 @@ async function askWhereToWriteRoutes() {
   return response.path;
 }
 
-// src/modules/routes/routes.templates.ts
+// src/modules/create-routes/routes.templates.ts
 var routesTemplate = (appName) => `// This file is auto-generated. Do not edit manually.
 
 import { zValidator } from '@hono/zod-validator';
@@ -135,7 +135,7 @@ var indexTemplate = `// This file is auto-generated. Do not edit manually.
 export { contractStatic } from './contract.routes';
 `;
 
-// src/modules/routes/index.ts
+// src/modules/create-routes/index.ts
 async function writeDefaultContractRoutes(config) {
   const routesDirectoryPath = await askWhereToWriteRoutes();
   fs2.ensureDirSync(routesDirectoryPath);

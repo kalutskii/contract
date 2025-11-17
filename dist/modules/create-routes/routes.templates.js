@@ -1,4 +1,4 @@
-// src/modules/routes/routes.templates.ts
+// src/modules/create-routes/routes.templates.ts
 var routesTemplate = (appName) => `// This file is auto-generated. Do not edit manually.
 
 import { zValidator } from '@hono/zod-validator';
