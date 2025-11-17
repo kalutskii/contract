@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "contract-config",
+  "type": "object",
+  "description": "Configuration file for contract utility.",
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Internal field for JSON schema support."
+    },
+    "appName": {
+      "type": "string",
+      "description": "Application name for which the contract is being generated."
+    },
+    "externalSources": {
+      "type": "array",
+      "description": "Paths to external contract endpoints (bun (hono) endpoints preferred).",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "contracts": {
+      "type": "array",
+      "description": "List of contract definitions to be processed.",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name of the contract (e.g., 'enums', 'types', 'errors')."
+          },
+          "emit": {
+            "type": "boolean",
+            "description": "Whether to emit runtime TypeScript or only declaration types.",
+            "default": false
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["appName", "contracts"],
+  "additionalProperties": false
+}
