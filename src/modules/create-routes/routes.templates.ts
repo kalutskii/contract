@@ -41,7 +41,7 @@ export async function readContract(app: string, name: string, emit: boolean): Pr
   try {
     const content = await readFile(contractPath, 'utf-8');
     return { content, file: fileName };
-  } catch (err) {
+  } catch {
     throw new HTTPException(404, {
       message: \`Contract file not found at \${contractPath}\`,
     });
@@ -56,7 +56,7 @@ export async function readContractConfig(): Promise<string> {
   try {
     const configContent = await readFile(configPath, 'utf-8');
     return JSON.parse(configContent);
-  } catch (err) {
+  } catch {
     throw new HTTPException(500, {
       message: \`Failed to read contract configuration from \${configPath}\`,
     });
