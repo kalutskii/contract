@@ -7,7 +7,6 @@
     "moduleDetection": "force",
 
     // Relative paths & aliases
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     },

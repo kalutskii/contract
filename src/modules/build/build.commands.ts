@@ -9,7 +9,7 @@ export class BuildCommand extends Command {
 
   async execute() {
     const config = await getConfig();
-    await handleEnvironment(config, false);
+    await handleEnvironment(config);
     await bundleAllContractDeclarations(config);
   }
 }

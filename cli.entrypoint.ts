@@ -3,12 +3,16 @@
 import { getClipanionClient } from '@/adapters/clipanion.client';
 import { BuildCommand } from '@/modules/build/build.commands';
 import { InitCommand, UpdateEnvironmentCommand } from '@/modules/init/init.commands';
-import { SyncCommand } from '@/modules/sync/sync.commands';
+import { PackPackageCommand } from '@/modules/pack/pack.commands';
+import { PreparePackageCommand } from '@/modules/prepare/prepare.commands';
+import { PublishPackageCommand } from '@/modules/publish/publish.commands';
 
 const clipanionClient = getClipanionClient();
 
 clipanionClient.register(InitCommand);
 clipanionClient.register(UpdateEnvironmentCommand);
 clipanionClient.register(BuildCommand);
-clipanionClient.register(SyncCommand);
+clipanionClient.register(PreparePackageCommand);
+clipanionClient.register(PackPackageCommand);
+clipanionClient.register(PublishPackageCommand);
 clipanionClient.runExit(process.argv.slice(2));

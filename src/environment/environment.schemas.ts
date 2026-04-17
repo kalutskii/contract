@@ -10,10 +10,22 @@ export const ConfigSchema = z.object({
     .array(z.string().regex(/^[a-zA-Z_-]+$/))
     .default([])
     .meta({ description: 'Array of selected contract names.' }),
-  externalServices: z
-    .array(z.union([z.url(), z.ipv4()]))
-    .default([])
-    .meta({ description: 'List of external service URLs or IP addresses the application interacts with.' }),
+  package: z
+    .object({
+      name: z.string().meta({ description: 'NPM package name, e.g. @scope/package-name' }),
+      version: z
+        .string()
+        .regex(/^\d+\.\d+\.\d+/)
+        .meta({ description: 'Semantic version, e.g. 1.0.0' }),
+      exports: z.record(z.string(), z.string()).optional().meta({ description: 'Optional package exports configuration.' }),
+    })
+    .meta({ description: 'Package metadata for contract distribution.' }),
+  npm: z
+    .object({
+      token: z.string().meta({ description: 'NPM authentication token used for publishing.' }),
+    })
+    .optional()
+    .meta({ description: 'Optional npm publishing configuration.' }),
 });
 export type Config = z.infer<typeof ConfigSchema>;
 
@@ -23,10 +35,9 @@ export const EnvironmentStatusSchema = z.object({
     .object({
       // * Ensure keys match ENVIRONMENT_DIRECTORIES
       manifests: z.boolean(), // Folder where contract manifests are stored
-      synchronized: z.boolean(), // Folder for synchronized contracts from external sources
       generated: z.boolean(), // Folder for generated contract d.ts files
     })
-    .default({ manifests: false, synchronized: false, generated: false })
+    .default({ manifests: false, generated: false })
     .meta({ description: 'Existence status of required environment directories.' }),
   manifestsExistence: z
     .record(z.string(), z.boolean()) // Cannot use config here directly, so using string keys

@@ -14,7 +14,7 @@ export class InitCommand extends Command {
 
     await clearEnvironment();
     const config = await createDefaultConfigFile();
-    await handleEnvironment(config, false);
+    await handleEnvironment(config);
 
     initializationCompletedMessage();
   }
