@@ -1,6 +1,7 @@
 import { log } from '@clack/prompts';
 import { execa } from 'execa';
 
+/** Result envelope for shell command execution. */
 export interface ExecutedCommandResult {
   success: boolean;
   stdout: string;
@@ -8,16 +9,19 @@ export interface ExecutedCommandResult {
   errorMessage?: string;
 }
 
+/** Executes a shell command and returns collected stdout/stderr with status. */
 export async function executeCommandWithResult(command: string, args: string[], cwd?: string): Promise<ExecutedCommandResult> {
-  // Executes a command using execa and returns captured stdout/stderr.
-
   let stdout = '';
   let stderr = '';
 
   try {
     const subprocess = execa(command, args, { stdio: ['ignore', 'pipe', 'pipe'], shell: true, cwd });
-    subprocess.stdout?.on('data', (data) => (stdout += data.toString()));
-    subprocess.stderr?.on('data', (data) => (stderr += data.toString()));
+    subprocess.stdout?.on('data', (data: Buffer | string) => {
+      stdout += String(data);
+    });
+    subprocess.stderr?.on('data', (data: Buffer | string) => {
+      stderr += String(data);
+    });
     await subprocess;
 
     return { success: true, stdout, stderr };
@@ -31,10 +35,8 @@ export async function executeCommandWithResult(command: string, args: string[], 
   }
 }
 
+/** Executes a shell command and logs errors when the command fails. */
 export async function executeCommand(command: string, args: string[], cwd?: string): Promise<boolean> {
-  // Executes a command using execa and handles errors, capturing stderr output.
-  // Optionally runs the command in a specific working directory via cwd parameter.
-
   const result = await executeCommandWithResult(command, args, cwd);
   if (!result.success) {
     log.error(`Error executing command: ${command} ${args.join(' ')}\n${result.stderr || result.stdout || result.errorMessage}`);

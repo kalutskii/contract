@@ -5,10 +5,11 @@ import { clearEnvironment, createDefaultConfigFile, getConfig, handleEnvironment
 
 import { environmentUpdateCompletedMessage, initializationCancelledMessage, initializationCompletedMessage } from './init.messages';
 
+/** CLI command that reinitializes contract configuration and environment. */
 export class InitCommand extends Command {
   static override paths = [['init']];
 
-  async execute() {
+  public async execute(): Promise<void> {
     const shouldInitialize = await initializePrompt();
     if (!shouldInitialize) return initializationCancelledMessage();
 
@@ -20,10 +21,11 @@ export class InitCommand extends Command {
   }
 }
 
+/** CLI command that syncs environment folders and contract manifests. */
 export class UpdateEnvironmentCommand extends Command {
   static override paths = [['update:environment']];
 
-  async execute() {
+  public async execute(): Promise<void> {
     const config = await getConfig();
     await handleEnvironment(config);
 

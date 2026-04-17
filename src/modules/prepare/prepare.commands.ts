@@ -4,6 +4,7 @@ import { getConfig, handleEnvironment } from '@/environment/environment.services
 
 import { prepareContractPackage } from './prepare.services';
 
+/** CLI command that assembles a publishable package from generated contracts. */
 export class PreparePackageCommand extends Command {
   static override paths = [['prepare:package']];
 
@@ -15,7 +16,7 @@ export class PreparePackageCommand extends Command {
     description: 'Skip automatic version bumping',
   });
 
-  async execute() {
+  public async execute(): Promise<void> {
     const config = await getConfig();
     await handleEnvironment(config);
     await prepareContractPackage(config, {

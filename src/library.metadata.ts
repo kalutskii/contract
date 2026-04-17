@@ -1,4 +1,9 @@
-// General synthetic metadata config for the library, including
-// formal fields like name and version, used across the codebase.
+interface LibraryMetadata {
+  /** The name of the library, used in CLI output and package identity. */
+  name: string;
+  /** The current version of the library, used in CLI output and package identity. */
+  version: string;
+}
 
-export const libraryMetadata = { name: 'contract', version: '0.1.0' };
+/** Static metadata used to configure CLI identity and version output. */
+export const libraryMetadata: LibraryMetadata = { name: 'contract', version: '0.1.0' };

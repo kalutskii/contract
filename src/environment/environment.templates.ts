@@ -1,7 +1,7 @@
 import type { Config } from './environment.schemas';
 
+/** Renders the default TypeScript config template for the user project. */
 export const renderConfigTemplate = (defaultConfig: Config): string => {
-  // Renders a TypeScript configuration file template based on the provided configuration object.
   const npmConfig = defaultConfig.npm
     ? `,
   npm: {
@@ -27,8 +27,8 @@ export default contractConfig;
 `;
 };
 
+/** Renders a contract manifest template source file for the selected contract. */
 export const renderManifestTemplate = (contractName: string): string =>
-  // Renders a TypeScript manifest file template for the specified contract.
   `// Define and export all types related to this contract (${contractName}).
 // This file will be bundled into ${contractName}.d.ts during "contract build".
 

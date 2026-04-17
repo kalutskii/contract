@@ -12,9 +12,8 @@ import {
   packagePackingStartedMessage,
 } from './pack.messages';
 
+/** Packs the prepared contract package directory into an npm tarball. */
 export async function packContractPackage(): Promise<void> {
-  // Packs the prepared contract package into a .tgz file.
-
   try {
     packagePackingStartedMessage();
 

@@ -18,9 +18,9 @@ import {
   versionNoChangeMessage,
 } from './prepare.messages';
 
-interface PackageFileEntry {
-  name: string;
-  type: 'dts' | 'js';
+interface PackageJsonWithVersion {
+  /** The version of the package. */
+  version: string;
 }
 
 async function collectGeneratedContracts(config: Config): Promise<Map<string, boolean>> {
@@ -40,7 +40,7 @@ async function collectGeneratedContracts(config: Config): Promise<Map<string, bo
       if (!exists) {
         missingGeneratedContractsMessage(contract);
       }
-    } catch (error) {
+    } catch (_error) {
       contractsMap.set(contract, false);
     }
   }
@@ -96,11 +96,12 @@ function generatePackageJson(config: Config, contracts: string[]): Record<string
 async function updatePackageVersion(packageJsonPath: string, newVersion: string): Promise<void> {
   // Updates the version field in package.json.
 
-  const packageJson = await fs.readJSON(packageJsonPath);
+  const packageJson = (await fs.readJSON(packageJsonPath)) as PackageJsonWithVersion;
   packageJson.version = newVersion;
   await fs.writeJSON(packageJsonPath, packageJson, { spaces: 2 });
 }
 
+/** Builds the publishable package directory from generated contract declarations. */
 export async function prepareContractPackage(
   config: Config,
   options: { bump?: 'patch' | 'minor' | 'major'; noBump?: boolean } = {}
@@ -156,10 +157,10 @@ export async function prepareContractPackage(
     }
 
     // Generate package.json
-    let packageJson = generatePackageJson(config, existingContracts);
+    const packageJson = generatePackageJson(config, existingContracts);
 
     // Version comes from the canonical source: contract.config.ts
-    let version = packageJson.version as string;
+    const version = String(packageJson.version);
 
     // Update package.json with the correct version
     packageJson.version = version;

@@ -2,6 +2,7 @@ import { Command, Option } from 'clipanion';
 
 import { publishContractPackage } from './publish.services';
 
+/** CLI command that publishes prepared contract package to npm. */
 export class PublishPackageCommand extends Command {
   static override paths = [['publish:package']];
 
@@ -13,7 +14,7 @@ export class PublishPackageCommand extends Command {
     description: 'Prepare package before publishing',
   });
 
-  async execute() {
+  public async execute(): Promise<void> {
     await publishContractPackage({
       access: this.access,
       prepare: this.prepare,

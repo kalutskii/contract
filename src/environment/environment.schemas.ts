@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+/** Runtime schema for project contract configuration. */
 export const ConfigSchema = z.object({
   app: z
     .string()
@@ -27,8 +28,10 @@ export const ConfigSchema = z.object({
     .optional()
     .meta({ description: 'Optional npm publishing configuration.' }),
 });
+/** Strongly-typed contract config derived from ConfigSchema. */
 export type Config = z.infer<typeof ConfigSchema>;
 
+/** Runtime schema describing expected filesystem environment state. */
 export const EnvironmentStatusSchema = z.object({
   contractDirectoryExists: z.boolean().default(false).meta({ description: 'Indicates if the main contract directory exists.' }),
   directoriesExistence: z
@@ -44,4 +47,5 @@ export const EnvironmentStatusSchema = z.object({
     .default({})
     .meta({ description: 'Existence status of required contract manifest files (contract.<contract>.manifest.ts).' }),
 });
+/** Strongly-typed environment status derived from EnvironmentStatusSchema. */
 export type EnvironmentStatus = z.infer<typeof EnvironmentStatusSchema>;

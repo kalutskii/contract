@@ -15,4 +15,4 @@ clipanionClient.register(BuildCommand);
 clipanionClient.register(PreparePackageCommand);
 clipanionClient.register(PackPackageCommand);
 clipanionClient.register(PublishPackageCommand);
-clipanionClient.runExit(process.argv.slice(2));
+void clipanionClient.runExit(process.argv.slice(2));

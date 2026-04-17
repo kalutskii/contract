@@ -3,17 +3,23 @@ import path from 'path';
 import { configFileNotFoundMessage, invalidConfigMessage } from './environment.chat';
 import { type Config, ConfigSchema } from './environment.schemas';
 
+interface ConfigModule {
+  /** The default export of the config module, expected to match the Config schema. */
+  default: unknown;
+}
+
+/** Loads and validates a config module from the given relative path. */
 export async function loadConfigFile(configPath: string): Promise<Config | null> {
-  // Imports and returns the configuration from the specified file path.
-
   try {
-    const rawConfig = (await import(path.join(process.cwd(), configPath))).default;
-    const config = await ConfigSchema.safeParseAsync(rawConfig); // Validate config with zod
+    const modulePath = path.join(process.cwd(), configPath);
+    const configModule = (await import(modulePath)) as ConfigModule;
+    const config = await ConfigSchema.safeParseAsync(configModule.default);
 
-    if (config.success) return config.data; // Valid config
-    invalidConfigMessage(configPath, config.error.message); // Log validation errors
+    if (config.success) return config.data;
+    invalidConfigMessage(configPath, config.error.message);
   } catch {
-    configFileNotFoundMessage(configPath); // Log if config file is not found
+    configFileNotFoundMessage(configPath);
   }
+
   return null;
 }

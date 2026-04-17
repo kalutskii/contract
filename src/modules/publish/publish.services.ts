@@ -2,7 +2,6 @@ import fs from 'fs-extra';
 import path from 'path';
 
 import { CONTRACT_DIRECTORY_NAME } from '@/environment/environment.constants';
-import type { Config } from '@/environment/environment.schemas';
 import { getConfig, handleEnvironment } from '@/environment/environment.services';
 import { executeCommandWithResult } from '@/utilities/exec.utilities';
 
@@ -17,8 +16,14 @@ import {
   packagePublishedMessage,
   packagePublishingStartedMessage,
   publishingPackageMessage,
-  versionBumpedDueToNpmCollisionMessage,
 } from './publish.messages';
+
+interface PackageJsonInfo {
+  /** The name of the package. */
+  name: string;
+  /** The version of the package. */
+  version?: string;
+}
 
 function resolveNpmToken(config: Awaited<ReturnType<typeof getConfig>>): { source: string; token: string } | null {
   if (config.npm?.token) return { source: 'config', token: config.npm.token };
@@ -74,11 +79,8 @@ async function resolveVersionCollision(packageName: string, version: string): Pr
   }
 }
 
+/** Publishes prepared contract package artifacts to npm with auth and validation checks. */
 export async function publishContractPackage(options: { access?: string; prepare?: boolean } = {}): Promise<void> {
-  // Publishes the prepared contract package to npm.
-  // Optional --prepare flag will prepare the package first.
-  // Public access is always used to support scoped public packages.
-
   try {
     packagePublishingStartedMessage();
 
@@ -108,9 +110,12 @@ export async function publishContractPackage(options: { access?: string; prepare
       process.exit(1);
     }
 
-    // Read package.json to get name
-    const packageJson = await fs.readJSON(packageJsonPath);
-    const packageName = packageJson.name as string;
+    const packageJson = (await fs.readJSON(packageJsonPath)) as PackageJsonInfo;
+    if (!packageJson.name) {
+      throw new Error('package.json is missing a valid "name" field.');
+    }
+
+    const packageName = packageJson.name;
 
     // Use config version (source of truth, updated by prepare if needed)
     const packageVersion = config.package.version;
