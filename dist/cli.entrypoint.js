@@ -27,12 +27,15 @@ import { confirm, isCancel, log } from "@clack/prompts";
 async function initializePrompt() {
   const shouldInitialize = await confirm({
     message: "If contract is already initialized, reinitialization will cause existing files to be overwritten. Do you want to proceed?",
-    initialValue: false
+    initialValue: true
   });
   return isCancel(shouldInitialize) ? false : shouldInitialize;
 }
 async function configFileCreationPrompt() {
-  const shouldCreate = await confirm({ message: "No configuration found. Would you like to create one?", initialValue: true });
+  const shouldCreate = await confirm({
+    message: "No configuration found. Would you like to create one?",
+    initialValue: true
+  });
   return isCancel(shouldCreate) ? false : shouldCreate;
 }
 var environmentClearedMessage = () => log.success("Existing contract environment cleared.");
@@ -95,8 +98,9 @@ async function inspectContractEnvironment(config, contractFolderPath) {
 import path2 from "path";
 async function loadConfigFile(configPath) {
   try {
-    const rawConfig = (await import(path2.join(process.cwd(), configPath))).default;
-    const config = await ConfigSchema.safeParseAsync(rawConfig);
+    const modulePath = path2.join(process.cwd(), configPath);
+    const configModule = await import(modulePath);
+    const config = await ConfigSchema.safeParseAsync(configModule.default);
     if (config.success)
       return config.data;
     invalidConfigMessage(configPath, config.error.message);
@@ -129,13 +133,10 @@ const contractConfig: Config = {
 export default contractConfig;
 `;
 };
-var renderManifestTemplate = (contractName) => (
-  // Renders a TypeScript manifest file template for the specified contract.
-  `// Define and export all types related to this contract (${contractName}).
+var renderManifestTemplate = (contractName) => `// Define and export all types related to this contract (${contractName}).
 // This file will be bundled into ${contractName}.d.ts during "contract build".
 
-`
-);
+`;
 
 // src/environment/environment.services.ts
 async function createDefaultConfigFile() {
@@ -143,7 +144,7 @@ async function createDefaultConfigFile() {
     contracts: DEFAULT_CONTRACTS,
     package: { name: "@scope/contracts", version: "1.0.0" }
   });
-  Bun.write(CONFIG_FILE_NAME, renderConfigTemplate(defaultConfig));
+  await Bun.write(CONFIG_FILE_NAME, renderConfigTemplate(defaultConfig));
   return defaultConfig;
 }
 async function getConfig() {
@@ -151,7 +152,7 @@ async function getConfig() {
   if (!config) {
     const shouldCreate = await configFileCreationPrompt();
     if (shouldCreate)
-      return await createDefaultConfigFile();
+      return createDefaultConfigFile();
     return process.exit(0);
   }
   return config;
@@ -173,7 +174,7 @@ async function handleEnvironment(config) {
   for (const [contract, exists] of manifestsExistenceEntries) {
     if (!exists) {
       const manifestFilePath = path3.join(contractFolderPath, "manifests", `contract.${contract}.manifest.ts`);
-      Bun.write(manifestFilePath, renderManifestTemplate(contract));
+      await Bun.write(manifestFilePath, renderManifestTemplate(contract));
       environmentStatus.manifestsExistence[contract] = true;
     }
   }
@@ -186,7 +187,7 @@ async function clearEnvironment() {
 }
 async function updateConfigVersion(newVersion) {
   const configPath = path3.resolve(CONFIG_FILE_NAME);
-  let content = await fs2.readFile(configPath, "utf-8");
+  const content = await fs2.readFile(configPath, "utf-8");
   const versionRegex = /version:\s*['"][\d.]+['"]/;
   const replacement = `version: '${newVersion}'`;
   if (!versionRegex.test(content)) {
@@ -208,8 +209,12 @@ async function executeCommandWithResult(command, args, cwd) {
   let stderr = "";
   try {
     const subprocess = execa(command, args, { stdio: ["ignore", "pipe", "pipe"], shell: true, cwd });
-    subprocess.stdout?.on("data", (data) => stdout += data.toString());
-    subprocess.stderr?.on("data", (data) => stderr += data.toString());
+    subprocess.stdout?.on("data", (data) => {
+      stdout += String(data);
+    });
+    subprocess.stderr?.on("data", (data) => {
+      stderr += String(data);
+    });
     await subprocess;
     return { success: true, stdout, stderr };
   } catch (error) {
@@ -369,6 +374,15 @@ import crypto from "crypto";
 import fs4 from "fs-extra";
 import path6 from "path";
 var PUBLISHABLE_FILES = ["index.d.ts", "index.js"];
+function isRecord(value) {
+  return typeof value === "object" && value !== null;
+}
+function toContractState(value) {
+  if (!isRecord(value) || typeof value.hash !== "string") {
+    return null;
+  }
+  return { hash: value.hash };
+}
 function addContractFiles(contracts) {
   return [...PUBLISHABLE_FILES, ...contracts.flatMap((c) => [`${c}.d.ts`, `${c}.js`])];
 }
@@ -386,7 +400,7 @@ async function computePackageHash(packageDir, contracts) {
       }
       content = content.replace(/\r\n/g, "\n").trim();
       hash.update(filename + ":" + content);
-    } catch (error) {
+    } catch (_error) {
       hash.update(filename + ":");
     }
   }
@@ -397,9 +411,11 @@ async function getContractState(packageDir) {
   const statePath = path6.join(stateDir, ".contract-package-state.json");
   try {
     if (await fs4.pathExists(statePath)) {
-      return await fs4.readJSON(statePath);
+      const rawState = await fs4.readJSON(statePath);
+      return toContractState(rawState);
     }
   } catch {
+    return null;
   }
   return null;
 }
@@ -410,7 +426,11 @@ async function writeContractState(packageDir, state) {
 }
 function bumpVersion(currentVersion, bumpType) {
   const parts = currentVersion.split(".");
-  const [major, minor, patch] = [parseInt(parts[0] ?? "0", 10), parseInt(parts[1] ?? "0", 10), parseInt(parts[2] ?? "0", 10)];
+  const [major, minor, patch] = [
+    parseInt(parts[0] ?? "0", 10),
+    parseInt(parts[1] ?? "0", 10),
+    parseInt(parts[2] ?? "0", 10)
+  ];
   switch (bumpType) {
     case "major":
       return `${major + 1}.0.0`;
@@ -447,7 +467,7 @@ async function collectGeneratedContracts(config) {
       if (!exists) {
         missingGeneratedContractsMessage(contract);
       }
-    } catch (error) {
+    } catch (_error) {
       contractsMap.set(contract, false);
     }
   }
@@ -517,8 +537,8 @@ async function prepareContractPackage(config, options = {}) {
     for (const contract of existingContracts) {
       await fs5.writeFile(path7.join(packageDir, `${contract}.js`), jsStub);
     }
-    let packageJson = generatePackageJson(config, existingContracts);
-    let version = packageJson.version;
+    const packageJson = generatePackageJson(config, existingContracts);
+    const version = String(packageJson.version);
     packageJson.version = version;
     const packageJsonPath = path7.join(packageDir, "package.json");
     await fs5.writeJSON(packageJsonPath, packageJson, { spaces: 2 });
@@ -650,6 +670,9 @@ async function publishContractPackage(options = {}) {
       process.exit(1);
     }
     const packageJson = await fs6.readJSON(packageJsonPath);
+    if (!packageJson.name) {
+      throw new Error('package.json is missing a valid "name" field.');
+    }
     const packageName = packageJson.name;
     const packageVersion = config.package.version;
     await resolveVersionCollision(packageName, packageVersion);
@@ -706,4 +729,4 @@ clipanionClient.register(BuildCommand);
 clipanionClient.register(PreparePackageCommand);
 clipanionClient.register(PackPackageCommand);
 clipanionClient.register(PublishPackageCommand);
-clipanionClient.runExit(process.argv.slice(2));
+void clipanionClient.runExit(process.argv.slice(2));

@@ -13,8 +13,10 @@ async function bundleContractDeclaration(app: string, contract: string): Promise
 
   const progressSpinner = spinner();
   progressSpinner.start(bundlingStartedMessage(contract));
+
   const executed = await executeCommand('npx', ['dts-bundle-generator', '-o', output, input, '--no-check']);
   if (!executed) process.exit(1);
+
   progressSpinner.stop(bundlingCompletedMessage(contract, output));
 }
 

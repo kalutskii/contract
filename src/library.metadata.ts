@@ -5,5 +5,8 @@ interface LibraryMetadata {
   version: string;
 }
 
-/** Static metadata used to configure CLI identity and version output. */
+/**
+ * Static metadata used to configure CLI identity and version output.
+ * When updating library version, also update the version in package.json.
+ */
 export const libraryMetadata: LibraryMetadata = { name: 'contract', version: '0.1.0' };

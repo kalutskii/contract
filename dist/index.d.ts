@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+/** Runtime schema for project contract configuration. */
 declare const ConfigSchema: z.ZodObject<{
     app: z.ZodDefault<z.ZodString>;
     contracts: z.ZodDefault<z.ZodArray<z.ZodString>>;
@@ -12,6 +13,7 @@ declare const ConfigSchema: z.ZodObject<{
         token: z.ZodString;
     }, z.core.$strip>>;
 }, z.core.$strip>;
+/** Strongly-typed contract config derived from ConfigSchema. */
 type Config = z.infer<typeof ConfigSchema>;
 
 export type { Config };

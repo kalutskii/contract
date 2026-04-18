@@ -15,6 +15,7 @@ const prettierConfig: Config = {
 
   // Import sorting via @trivago/prettier-plugin-sort-imports
   // More details: https://github.com/trivago/prettier-plugin-sort-imports?tab=readme-ov-file#usage
+
   importOrder: ['<THIRD_PARTY_MODULES>', '^@/', '^\\.{1,2}/'],
   importOrderSeparation: true,
   importOrderSortSpecifiers: true,

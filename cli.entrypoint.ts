@@ -7,6 +7,9 @@ import { PackPackageCommand } from '@/modules/pack/pack.commands';
 import { PreparePackageCommand } from '@/modules/prepare/prepare.commands';
 import { PublishPackageCommand } from '@/modules/publish/publish.commands';
 
+// Entrypoint for the CLI, responsible for registering commands and executing the CLI application.
+// More details: https://mael.dev/clipanion/docs/getting-started#registering-multiple-commands
+
 const clipanionClient = getClipanionClient();
 
 clipanionClient.register(InitCommand);
@@ -15,4 +18,5 @@ clipanionClient.register(BuildCommand);
 clipanionClient.register(PreparePackageCommand);
 clipanionClient.register(PackPackageCommand);
 clipanionClient.register(PublishPackageCommand);
+
 void clipanionClient.runExit(process.argv.slice(2));

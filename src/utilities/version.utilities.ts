@@ -83,7 +83,11 @@ export async function writeContractState(packageDir: string, state: ContractStat
 /** Bumps a semantic version according to the selected bump type. */
 export function bumpVersion(currentVersion: string, bumpType: 'patch' | 'minor' | 'major'): string {
   const parts = currentVersion.split('.');
-  const [major, minor, patch] = [parseInt(parts[0] ?? '0', 10), parseInt(parts[1] ?? '0', 10), parseInt(parts[2] ?? '0', 10)];
+  const [major, minor, patch] = [
+    parseInt(parts[0] ?? '0', 10),
+    parseInt(parts[1] ?? '0', 10),
+    parseInt(parts[2] ?? '0', 10),
+  ];
 
   switch (bumpType) {
     case 'major':
@@ -100,9 +104,7 @@ export async function shouldBumpVersion(packageDir: string, contracts: string[])
   const currentHash = await computePackageHash(packageDir, contracts);
   const previousState = await getContractState(packageDir);
 
-  if (!previousState) {
-    return false;
-  }
+  if (!previousState) return false;
 
   return previousState.hash !== currentHash;
 }
