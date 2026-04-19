@@ -2,7 +2,7 @@
 export const CONFIG_FILE_NAME = 'contract.config.ts' as const;
 
 /** Default contract keys used when bootstrapping a new config. */
-export const DEFAULT_CONTRACTS = ['hono', 'types'] as const;
+export const DEFAULT_CONTRACTS = ['api', 'types'] as const;
 
 /** Root directory containing generated contract artifacts. */
 export const CONTRACT_DIRECTORY_NAME = 'contract' as const;

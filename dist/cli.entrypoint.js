@@ -51,7 +51,7 @@ var configFileLoadFailedMessage = (configPath, errorMessage) => log.error(`Faile
 
 // src/environment/environment.constants.ts
 var CONFIG_FILE_NAME = "contract.config.ts";
-var DEFAULT_CONTRACTS = ["hono", "types"];
+var DEFAULT_CONTRACTS = ["api", "types"];
 var CONTRACT_DIRECTORY_NAME = "contract";
 var ENVIRONMENT_DIRECTORIES = ["manifests", "generated"];
 
