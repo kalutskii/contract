@@ -566,6 +566,7 @@ function generatePackageJson(config, contracts) {
   const files = ["index.d.ts", "index.js", ...contracts.flatMap((c) => [`${c}.d.ts`, `${c}.js`])];
   return {
     name: config.package.name,
+    description: `Shared TypeScript contract definitions for ${config.app}.`,
     version: config.package.version,
     private: false,
     type: "module",

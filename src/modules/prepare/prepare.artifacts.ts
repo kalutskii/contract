@@ -31,6 +31,7 @@ function generatePackageJson(config: Config, contracts: string[]): Record<string
 
   return {
     name: config.package.name,
+    description: `Shared TypeScript contract definitions for ${config.app}.`,
     version: config.package.version,
     private: false,
     type: 'module',
