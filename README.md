@@ -70,8 +70,9 @@ contract/package/
   ├── api.js                # Stub
   ├── types.d.ts            # Contract: types
   └── types.js              # Stub
-  └── .contract-state.json  # Stores content hash
 ```
+
+Hash state is stored at `contract/.contract-package-state.json`.
 
 **Automatic versioning:**
 
@@ -107,9 +108,11 @@ bunx contract publish:package
 
 Publishes the prepared package to npm. The CLI writes `.npmrc` inside `contract/package` and publishes with public access enabled.
 
-**Automatic version collision resolution:**
+If the current version already exists on npm, publishing fails with a clear message and you should run:
 
-If the current version already exists on npm, the CLI automatically bumps the patch version until finding an available version. You'll see a message indicating the version was bumped.
+```bash
+bunx contract prepare:package --bump patch
+```
 
 **Token priority:**
 
@@ -209,13 +212,14 @@ const user: UserCreateRequest = {
 bunx contract update:environment   # Sync manifest files
 bunx contract build                # Generate .d.ts from manifests
 bunx contract prepare:package      # Create npm package (auto-versions if content changed)
-bunx contract publish:package      # Publish to npm (auto-resolves version collisions)
+bunx contract publish:package      # Publish to npm
 ```
 
-**Versioning is fully automatic:**
+**Versioning behavior:**
 
 - `prepare:package` detects content changes and bumps patch version automatically
-- `publish:package` detects if version exists on npm and bumps patch until available
+- `publish:package` checks whether target version already exists on npm
+- if version exists, publish fails and asks for manual bump (`--bump patch|minor|major`)
 - Use `--bump major|minor` to manually override during prepare
 - Use `--no-bump` to disable automatic bumping
 
@@ -246,12 +250,12 @@ The project uses:
 ## Notes
 
 - This library is **local-only** — it does not perform remote synchronization or automatic publishing
-- Publishing writes `.npmrc` in `contract/package` from `config.npm.token`, `NPM_TOKEN`, or `NODE_AUTH_TOKEN`
+- Publishing uses a temporary `.npmrc` in `contract/package` from `config.npm.token`, `NPM_TOKEN`, or `NODE_AUTH_TOKEN` and removes it after publish attempt
 - Contract manifests should contain only type definitions, not runtime code
 - Use `contract update:environment` to regenerate missing files (e.g., after adding new contracts)
 - Versions are automatically managed based on content changes and npm registry state
-- Content hash is stored in `contract/package/.contract-state.json` for change detection
-- Version collisions are automatically resolved by bumping patch versions
+- Content hash is stored in `contract/.contract-package-state.json` for change detection
+- If npm version already exists, bump version manually via `contract prepare:package --bump ...`
 
 ## License
 

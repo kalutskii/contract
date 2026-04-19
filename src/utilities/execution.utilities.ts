@@ -9,6 +9,7 @@ export interface ExecutedCommandResult {
   errorMessage?: string;
 }
 
+/** Buffer for capturing command output. */
 interface CommandOutputBuffer {
   stdout: string;
   stderr: string;

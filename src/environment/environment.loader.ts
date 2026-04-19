@@ -27,12 +27,14 @@ async function resolveConfigModuleUrl(modulePath: string): Promise<string> {
 export async function loadConfigFile(configPath: string): Promise<Config | null> {
   const modulePath = resolveConfigModulePath(configPath);
 
+  // 1) Check if config file exists before attempting to load, and warn if not found.
   if (!(await fs.pathExists(modulePath))) {
     configFileNotFoundMessage(configPath);
     return null;
   }
 
   try {
+    // 2) Dynamically import the config module with cache-busting to ensure latest content is loaded.
     const moduleUrl = await resolveConfigModuleUrl(modulePath);
     const configModule = (await import(moduleUrl)) as ConfigModule;
     const config = await ConfigSchema.safeParseAsync(configModule.default);
