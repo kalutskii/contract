@@ -1,3 +1,5 @@
+import { spinner } from '@clack/prompts';
+
 import { getConfig, handleEnvironment } from '@/environment/environment.services';
 import { prepareContractPackage } from '@/modules/prepare/prepare.services';
 import { executeCommandWithResult } from '@/utilities/execution.utilities';
@@ -7,13 +9,12 @@ import { getPublishFailureMessage } from './publish.errors';
 import {
   fatalErrorWhilePublishingMessage,
   npmTokenMissingMessage,
-  npmTokenSourceMessage,
   packageDirectoryNotFoundMessage,
   packageJsonNotFoundMessage,
   packagePreparationStartedMessage,
-  packagePublishedMessage,
-  packagePublishingStartedMessage,
-  publishingPackageMessage,
+  publishSpinnerCompletedMessage,
+  publishSpinnerFailedMessage,
+  publishSpinnerStartedMessage,
 } from './publish.messages';
 import { assertVersionAvailableOnNpm } from './publish.registry';
 import {
@@ -26,10 +27,10 @@ import {
 /** Publishes prepared contract package artifacts to npm with auth and validation checks. */
 export async function publishContractPackage(options: { access?: string; prepare?: boolean } = {}): Promise<void> {
   let packageDirForCleanup: string | null = null;
+  let publishSpinner: ReturnType<typeof spinner> | null = null;
 
   try {
-    // Step 1: Load config and start publish flow logs.
-    packagePublishingStartedMessage();
+    // Step 1: Load config.
     const config = await getConfig();
 
     // Step 2: Optionally prepare package artifacts before publish.
@@ -75,8 +76,10 @@ export async function publishContractPackage(options: { access?: string; prepare
       process.exit(1);
     }
 
-    npmTokenSourceMessage(npmToken.source);
-    publishingPackageMessage(packageName, packageVersion);
+    // Step 6: Show compact publish progress and write auth config.
+    publishSpinner = spinner();
+    publishSpinner.start(publishSpinnerStartedMessage(packageName, packageVersion));
+
     await writeNpmRc(paths.packageDir, npmToken.token);
 
     // Step 6: Validate CLI options and execute npm publish.
@@ -92,9 +95,13 @@ export async function publishContractPackage(options: { access?: string; prepare
       throw new Error(getPublishFailureMessage(errorOutput));
     }
 
-    // Step 8: Report success.
-    packagePublishedMessage(packageName, packageVersion);
+    // Step 8: Report success in the same progress line.
+    publishSpinner.stop(publishSpinnerCompletedMessage(packageName, packageVersion));
   } catch (error) {
+    if (publishSpinner) {
+      publishSpinner.stop(publishSpinnerFailedMessage());
+    }
+
     const errorMessage = error instanceof Error ? error.message : String(error);
     fatalErrorWhilePublishingMessage(errorMessage);
     process.exit(1);

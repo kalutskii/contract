@@ -1,11 +1,16 @@
 import { log } from '@clack/prompts';
-import { dim, green } from 'kleur/colors';
+import { green } from 'kleur/colors';
 
-/** Logs package packing start. */
-export const packagePackingStartedMessage = (): void => log.info(`Packing contract package...`);
-/** Logs successful package archive creation. */
-export const packagePackedMessage = (filename: string, filepath: string): void =>
-  log.success(`Package packed successfully: ${green(filename)} (${dim(filepath)})`);
+/** Returns spinner text when package packing starts. */
+export const packSpinnerStartedMessage = (): string => 'Packing contract package...';
+/** Returns spinner text when package packing succeeds with archive details. */
+export const packSpinnerCompletedMessage = (filename: string, filepath: string): string =>
+  `Packed ${filename} (${filepath}).`;
+/** Returns spinner text when package packing succeeds but archive name is unavailable. */
+export const packSpinnerCompletedFallbackMessage = (): string => 'Packed package successfully.';
+/** Returns spinner text when package packing fails. */
+export const packSpinnerFailedMessage = (): string => 'Pack failed.';
+
 /** Logs that prepared package directory is missing. */
 export const packageDirectoryNotFoundMessage = (): void =>
   log.error(`Contract package directory not found. Run ${green('contract prepare:package')} first.`);
@@ -13,4 +18,5 @@ export const packageDirectoryNotFoundMessage = (): void =>
 export const packageJsonNotFoundMessage = (): void =>
   log.error(`Package metadata not found. Run ${green('contract prepare:package')} first.`);
 /** Logs fatal pack command failure details. */
-export const fatalErrorWhilePackingMessage = (error: string): void => log.error(`Fatal error while packing package: ${error}`);
+export const fatalErrorWhilePackingMessage = (error: string): void =>
+  log.error(`Fatal error while packing package: ${error}`);

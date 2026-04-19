@@ -1,21 +1,27 @@
+import { spinner } from '@clack/prompts';
 import path from 'path';
 
 import { executeCommand } from '@/utilities/execution.utilities';
 
 import {
   fatalErrorWhilePackingMessage,
+  packSpinnerCompletedFallbackMessage,
+  packSpinnerCompletedMessage,
+  packSpinnerFailedMessage,
+  packSpinnerStartedMessage,
   packageDirectoryNotFoundMessage,
   packageJsonNotFoundMessage,
-  packagePackedMessage,
-  packagePackingStartedMessage,
 } from './pack.messages';
 import { ensurePackPathsExist, findPackedArchive, resolvePackPaths } from './pack.validation';
 
 /** Packs the prepared contract package directory into an npm tarball. */
 export async function packContractPackage(): Promise<void> {
+  let packSpinner: ReturnType<typeof spinner> | null = null;
+
   try {
-    // Step 1: Start pack flow.
-    packagePackingStartedMessage();
+    // Step 1: Start compact pack progress flow.
+    packSpinner = spinner();
+    packSpinner.start(packSpinnerStartedMessage());
 
     // Step 2: Resolve and validate prepared package paths.
     const paths = resolvePackPaths();
@@ -47,9 +53,15 @@ export async function packContractPackage(): Promise<void> {
 
     if (tgzFile) {
       const tgzPath = path.join(paths.packageDir, tgzFile);
-      packagePackedMessage(tgzFile, tgzPath);
+      packSpinner.stop(packSpinnerCompletedMessage(tgzFile, tgzPath));
+    } else {
+      packSpinner.stop(packSpinnerCompletedFallbackMessage());
     }
   } catch (error) {
+    if (packSpinner) {
+      packSpinner.stop(packSpinnerFailedMessage());
+    }
+
     const errorMessage = error instanceof Error ? error.message : String(error);
     fatalErrorWhilePackingMessage(errorMessage);
     process.exit(1);

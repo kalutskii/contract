@@ -8,8 +8,6 @@ import { collectExistingGeneratedContracts, writePreparedArtifacts } from './pre
 import {
   fatalErrorWhilePreparingPackageMessage,
   missingGeneratedContractsMessage,
-  packageFilesCreatedMessage,
-  packageJsonGeneratedMessage,
   packagePreparationCompletedMessage,
   packagePreparationStartedMessage,
 } from './prepare.messages';
@@ -33,7 +31,6 @@ export async function prepareContractPackage(config: Config, options: PrepareOpt
 
     // Step 3: Recreate package artifacts (d.ts, js stubs, package.json).
     const { packageJsonPath, baseVersion } = await writePreparedArtifacts(config, packageDir, existingContracts);
-    packageFilesCreatedMessage(packageDir);
 
     // Step 4: Apply manual/automatic versioning and persist hash state.
     await applyPrepareVersioning({
@@ -47,7 +44,6 @@ export async function prepareContractPackage(config: Config, options: PrepareOpt
     });
 
     // Step 5: Finish and report success.
-    packageJsonGeneratedMessage(config.package.name);
     packagePreparationCompletedMessage();
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);

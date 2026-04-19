@@ -375,13 +375,16 @@ var UpdateEnvironmentCommand = class extends Command2 {
 import { Command as Command3 } from "clipanion";
 
 // src/modules/pack/pack.services.ts
+import { spinner as spinner2 } from "@clack/prompts";
 import path6 from "path";
 
 // src/modules/pack/pack.messages.ts
 import { log as log5 } from "@clack/prompts";
-import { dim as dim2, green as green3 } from "kleur/colors";
-var packagePackingStartedMessage = () => log5.info(`Packing contract package...`);
-var packagePackedMessage = (filename, filepath) => log5.success(`Package packed successfully: ${green3(filename)} (${dim2(filepath)})`);
+import { green as green3 } from "kleur/colors";
+var packSpinnerStartedMessage = () => "Packing contract package...";
+var packSpinnerCompletedMessage = (filename, filepath) => `Packed ${filename} (${filepath}).`;
+var packSpinnerCompletedFallbackMessage = () => "Packed package successfully.";
+var packSpinnerFailedMessage = () => "Pack failed.";
 var packageDirectoryNotFoundMessage = () => log5.error(`Contract package directory not found. Run ${green3("contract prepare:package")} first.`);
 var packageJsonNotFoundMessage = () => log5.error(`Package metadata not found. Run ${green3("contract prepare:package")} first.`);
 var fatalErrorWhilePackingMessage = (error) => log5.error(`Fatal error while packing package: ${error}`);
@@ -409,8 +412,10 @@ async function findPackedArchive(packageDir) {
 
 // src/modules/pack/pack.services.ts
 async function packContractPackage() {
+  let packSpinner = null;
   try {
-    packagePackingStartedMessage();
+    packSpinner = spinner2();
+    packSpinner.start(packSpinnerStartedMessage());
     const paths = resolvePackPaths();
     try {
       await ensurePackPathsExist(paths);
@@ -433,9 +438,14 @@ async function packContractPackage() {
     const tgzFile = await findPackedArchive(paths.packageDir);
     if (tgzFile) {
       const tgzPath = path6.join(paths.packageDir, tgzFile);
-      packagePackedMessage(tgzFile, tgzPath);
+      packSpinner.stop(packSpinnerCompletedMessage(tgzFile, tgzPath));
+    } else {
+      packSpinner.stop(packSpinnerCompletedFallbackMessage());
     }
   } catch (error) {
+    if (packSpinner) {
+      packSpinner.stop(packSpinnerFailedMessage());
+    }
     const errorMessage = error instanceof Error ? error.message : String(error);
     fatalErrorWhilePackingMessage(errorMessage);
     process.exit(1);
@@ -629,10 +639,8 @@ async function updatePackageVersion(packageJsonPath, newVersion) {
 
 // src/modules/prepare/prepare.messages.ts
 import { log as log6 } from "@clack/prompts";
-import { dim as dim3, green as green4 } from "kleur/colors";
+import { green as green4 } from "kleur/colors";
 var packagePreparationStartedMessage = (app) => log6.info(`Preparing package ${green4(app)} for distribution...`);
-var packageFilesCreatedMessage = (filePath) => log6.success(`Package files created successfully at ${dim3(filePath)}`);
-var packageJsonGeneratedMessage = (packageName) => log6.success(`Generated ${dim3("package.json")} for ${green4(packageName)}`);
 var packagePreparationCompletedMessage = () => log6.success(`Package preparation completed. Ready for publishing.`);
 var missingGeneratedContractsMessage = (contractName) => log6.warn(`Contract ${green4(contractName)} was not found in generated files. Run ${green4("contract build")} first to generate contract declarations.`);
 var versionBumpedMessage = (oldVersion, newVersion, reason) => log6.success(`Version bumped from ${green4(oldVersion)} to ${green4(newVersion)} (${reason}).`);
@@ -676,7 +684,6 @@ async function prepareContractPackage(config, options = {}) {
     const packageDir = path10.join(process.cwd(), CONTRACT_DIRECTORY_NAME, "package");
     const previousState = await getContractState(packageDir);
     const { packageJsonPath, baseVersion } = await writePreparedArtifacts(config, packageDir, existingContracts);
-    packageFilesCreatedMessage(packageDir);
     await applyPrepareVersioning({
       config,
       packageDir,
@@ -686,7 +693,6 @@ async function prepareContractPackage(config, options = {}) {
       previousHash: previousState?.hash ?? null,
       options
     });
-    packageJsonGeneratedMessage(config.package.name);
     packagePreparationCompletedMessage();
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -716,6 +722,9 @@ var PreparePackageCommand = class extends Command4 {
 
 // src/modules/publish/publish.commands.ts
 import { Command as Command5, Option as Option2 } from "clipanion";
+
+// src/modules/publish/publish.services.ts
+import { spinner as spinner3 } from "@clack/prompts";
 
 // src/modules/publish/publish.auth.ts
 import fs8 from "fs-extra";
@@ -757,14 +766,13 @@ ${output}`;
 // src/modules/publish/publish.messages.ts
 import { log as log7 } from "@clack/prompts";
 import { green as green5 } from "kleur/colors";
-var packagePublishingStartedMessage = () => log7.info(`Publishing contract package to npm...`);
-var packagePublishedMessage = (packageName, version) => log7.success(`Package ${green5(packageName)} v${version} published successfully.`);
+var publishSpinnerStartedMessage = (packageName, version) => `Publishing ${packageName}@${version} to npm...`;
+var publishSpinnerCompletedMessage = (packageName, version) => `Published ${packageName}@${version}.`;
+var publishSpinnerFailedMessage = () => "Publish failed.";
 var packageDirectoryNotFoundMessage2 = () => log7.error(`Contract package directory not found. Run ${green5("contract prepare:package")} first.`);
 var packageJsonNotFoundMessage2 = () => log7.error(`Package metadata not found. Run ${green5("contract prepare:package")} first.`);
 var packagePreparationStartedMessage2 = () => log7.info(`Preparing package before publishing...`);
 var npmTokenMissingMessage = () => log7.error(`No npm token provided. Set config.npm.token or NPM_TOKEN env variable.`);
-var npmTokenSourceMessage = (source) => log7.success(`Using npm token from ${green5(source)}.`);
-var publishingPackageMessage = (packageName, version) => log7.success(`Publishing ${green5(`${packageName}@${version}`)}.`);
 var fatalErrorWhilePublishingMessage = (error) => log7.error(`Fatal error while publishing package: ${error}`);
 
 // src/modules/publish/publish.registry.ts
@@ -813,8 +821,8 @@ async function syncPackageJsonVersion(packageJsonPath, packageJson, expectedVers
 // src/modules/publish/publish.services.ts
 async function publishContractPackage(options = {}) {
   let packageDirForCleanup = null;
+  let publishSpinner = null;
   try {
-    packagePublishingStartedMessage();
     const config = await getConfig();
     if (options.prepare) {
       packagePreparationStartedMessage2();
@@ -847,8 +855,8 @@ async function publishContractPackage(options = {}) {
       npmTokenMissingMessage();
       process.exit(1);
     }
-    npmTokenSourceMessage(npmToken.source);
-    publishingPackageMessage(packageName, packageVersion);
+    publishSpinner = spinner3();
+    publishSpinner.start(publishSpinnerStartedMessage(packageName, packageVersion));
     await writeNpmRc(paths.packageDir, npmToken.token);
     if (options.access && options.access !== "public") {
       throw new Error("Only --access public is supported for contract publish:package.");
@@ -858,8 +866,11 @@ async function publishContractPackage(options = {}) {
       const errorOutput = publishResult.stderr || publishResult.stdout || publishResult.errorMessage || "Unknown error";
       throw new Error(getPublishFailureMessage(errorOutput));
     }
-    packagePublishedMessage(packageName, packageVersion);
+    publishSpinner.stop(publishSpinnerCompletedMessage(packageName, packageVersion));
   } catch (error) {
+    if (publishSpinner) {
+      publishSpinner.stop(publishSpinnerFailedMessage());
+    }
     const errorMessage = error instanceof Error ? error.message : String(error);
     fatalErrorWhilePublishingMessage(errorMessage);
     process.exit(1);
