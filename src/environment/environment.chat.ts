@@ -24,6 +24,8 @@ export const environmentClearedMessage = (): void => log.success('Existing contr
 /** Logs schema validation issues for config files. */
 export const invalidConfigMessage = (configPath: string, errorMessage: string): void =>
   log.error(`Invalid config format at ${configPath}: ${errorMessage}`);
-/** Logs that the config file is missing and initialization is required. */
-export const configFileNotFoundMessage = (configPath: string): void =>
-  log.warn(`Config not found at ${configPath}, running initialization script.`);
+/** Logs that the config file is missing and user may create a default one. */
+export const configFileNotFoundMessage = (configPath: string): void => log.warn(`Config not found at ${configPath}.`);
+/** Logs that config file exists but could not be loaded as a module. */
+export const configFileLoadFailedMessage = (configPath: string, errorMessage: string): void =>
+  log.error(`Failed to load config at ${configPath}: ${errorMessage}`);

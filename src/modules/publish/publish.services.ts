@@ -1,11 +1,9 @@
-import fs from 'fs-extra';
-import path from 'path';
-
-import { CONTRACT_DIRECTORY_NAME } from '@/environment/environment.constants';
 import { getConfig, handleEnvironment } from '@/environment/environment.services';
-import { executeCommandWithResult } from '@/utilities/exec.utilities';
+import { prepareContractPackage } from '@/modules/prepare/prepare.services';
+import { executeCommandWithResult } from '@/utilities/execution.utilities';
 
-import { prepareContractPackage } from '../prepare/prepare.services';
+import { removeNpmRc, resolveNpmToken, writeNpmRc } from './publish.auth';
+import { getPublishFailureMessage } from './publish.errors';
 import {
   fatalErrorWhilePublishingMessage,
   npmTokenMissingMessage,
@@ -17,118 +15,60 @@ import {
   packagePublishingStartedMessage,
   publishingPackageMessage,
 } from './publish.messages';
-
-interface PackageJsonInfo {
-  /** The name of the package. */
-  name: string;
-  /** The version of the package. */
-  version?: string;
-}
-
-function resolveNpmToken(config: Awaited<ReturnType<typeof getConfig>>): { source: string; token: string } | null {
-  if (config.npm?.token) return { source: 'config', token: config.npm.token };
-  if (process.env.NPM_TOKEN) return { source: 'NPM_TOKEN', token: process.env.NPM_TOKEN };
-  if (process.env.NODE_AUTH_TOKEN) return { source: 'NODE_AUTH_TOKEN', token: process.env.NODE_AUTH_TOKEN };
-
-  return null;
-}
-
-async function writeNpmRc(packageDir: string, token: string): Promise<void> {
-  const npmrcPath = path.join(packageDir, '.npmrc');
-  await fs.writeFile(npmrcPath, `//registry.npmjs.org/:_authToken=${token}\n`);
-}
-
-function getPublishFailureMessage(output: string): string {
-  const normalizedOutput = output.toLowerCase();
-
-  if (
-    normalizedOutput.includes('eneedauth') ||
-    normalizedOutput.includes('e401') ||
-    normalizedOutput.includes('403') ||
-    normalizedOutput.includes('auth')
-  ) {
-    return `NPM publish failed due to authentication or permission issues. Verify the token and package access settings.\n${output}`;
-  }
-
-  if (normalizedOutput.includes('registry')) {
-    return `NPM publish failed due to registry configuration. Verify the package is being published to npmjs.org.\n${output}`;
-  }
-
-  return `NPM publish failed.\n${output}`;
-}
-
-async function versionExistsOnNpm(packageName: string, version: string): Promise<boolean> {
-  // Checks if a specific version exists on npm registry.
-
-  const checkResult = await executeCommandWithResult('npm', ['view', `${packageName}@${version}`]);
-
-  return checkResult.success;
-}
-
-async function resolveVersionCollision(packageName: string, version: string): Promise<void> {
-  // Checks if target version already exists on npm.
-  // If it does, this is a fatal error - the user must bump the version manually.
-
-  const exists = await versionExistsOnNpm(packageName, version);
-
-  if (exists) {
-    throw new Error(
-      `Version ${version} already exists on npm. Cannot publish duplicate version.\n` +
-        `Run "contract prepare:package --bump patch" to bump the version, then try publishing again.`
-    );
-  }
-}
+import { assertVersionAvailableOnNpm } from './publish.registry';
+import {
+  ensurePublishPathsExist,
+  readPackageJsonInfo,
+  resolvePublishPaths,
+  syncPackageJsonVersion,
+} from './publish.validation';
 
 /** Publishes prepared contract package artifacts to npm with auth and validation checks. */
 export async function publishContractPackage(options: { access?: string; prepare?: boolean } = {}): Promise<void> {
-  try {
-    packagePublishingStartedMessage();
+  let packageDirForCleanup: string | null = null;
 
+  try {
+    // Step 1: Load config and start publish flow logs.
+    packagePublishingStartedMessage();
     const config = await getConfig();
 
-    // Optionally prepare package first
+    // Step 2: Optionally prepare package artifacts before publish.
     if (options.prepare) {
       packagePreparationStartedMessage();
       await handleEnvironment(config);
       await prepareContractPackage(config);
     }
 
-    const packageDir = path.resolve(CONTRACT_DIRECTORY_NAME, 'package');
-    const packageJsonPath = path.join(packageDir, 'package.json');
+    // Step 3: Resolve and validate package paths/metadata.
+    const paths = resolvePublishPaths();
+    packageDirForCleanup = paths.packageDir;
 
-    // Verify package directory exists
-    const packageDirExists = await fs.pathExists(packageDir);
-    if (!packageDirExists) {
-      packageDirectoryNotFoundMessage();
-      process.exit(1);
+    try {
+      await ensurePublishPathsExist(paths);
+    } catch (error) {
+      const code = error instanceof Error ? error.message : String(error);
+      if (code === 'PACKAGE_DIR_NOT_FOUND') {
+        packageDirectoryNotFoundMessage();
+        process.exit(1);
+      }
+
+      if (code === 'PACKAGE_JSON_NOT_FOUND') {
+        packageJsonNotFoundMessage();
+        process.exit(1);
+      }
+
+      throw error;
     }
 
-    // Verify package.json exists
-    const packageJsonExists = await fs.pathExists(packageJsonPath);
-    if (!packageJsonExists) {
-      packageJsonNotFoundMessage();
-      process.exit(1);
-    }
-
-    const packageJson = (await fs.readJSON(packageJsonPath)) as PackageJsonInfo;
-    if (!packageJson.name) {
-      throw new Error('package.json is missing a valid "name" field.');
-    }
-
+    const packageJson = await readPackageJsonInfo(paths.packageJsonPath);
     const packageName = packageJson.name;
 
-    // Use config version (source of truth, updated by prepare if needed)
+    // Step 4: Enforce config version as source-of-truth for publish.
     const packageVersion = config.package.version;
+    await assertVersionAvailableOnNpm(packageName, packageVersion);
+    await syncPackageJsonVersion(paths.packageJsonPath, packageJson, packageVersion);
 
-    // Verify version doesn't already exist on npm
-    await resolveVersionCollision(packageName, packageVersion);
-
-    // Ensure package.json has the correct version from config
-    if (packageJson.version !== packageVersion) {
-      packageJson.version = packageVersion;
-      await fs.writeJSON(packageJsonPath, packageJson, { spaces: 2 });
-    }
-
+    // Step 5: Resolve npm auth and write local .npmrc for publish.
     const npmToken = resolveNpmToken(config);
     if (!npmToken) {
       npmTokenMissingMessage();
@@ -137,25 +77,30 @@ export async function publishContractPackage(options: { access?: string; prepare
 
     npmTokenSourceMessage(npmToken.source);
     publishingPackageMessage(packageName, packageVersion);
-    await writeNpmRc(packageDir, npmToken.token);
+    await writeNpmRc(paths.packageDir, npmToken.token);
 
+    // Step 6: Validate CLI options and execute npm publish.
     if (options.access && options.access !== 'public') {
       throw new Error('Only --access public is supported for contract publish:package.');
     }
 
-    const publishResult = await executeCommandWithResult('npm', ['publish', '--access', 'public'], packageDir);
+    const publishResult = await executeCommandWithResult('npm', ['publish', '--access', 'public'], paths.packageDir);
 
-    // Only fail on actual error (non-zero exit code)
-    // Note: npm notice messages go to stderr but are informational, not errors
+    // Step 7: Treat only non-zero exit as failure; npm notice in stderr is allowed.
     if (!publishResult.success) {
       const errorOutput = publishResult.stderr || publishResult.stdout || publishResult.errorMessage || 'Unknown error';
       throw new Error(getPublishFailureMessage(errorOutput));
     }
 
+    // Step 8: Report success.
     packagePublishedMessage(packageName, packageVersion);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     fatalErrorWhilePublishingMessage(errorMessage);
     process.exit(1);
+  } finally {
+    if (packageDirForCleanup) {
+      await removeNpmRc(packageDirForCleanup);
+    }
   }
 }

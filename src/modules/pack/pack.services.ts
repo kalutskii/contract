@@ -1,8 +1,6 @@
-import fs from 'fs-extra';
 import path from 'path';
 
-import { CONTRACT_DIRECTORY_NAME } from '@/environment/environment.constants';
-import { executeCommand } from '@/utilities/exec.utilities';
+import { executeCommand } from '@/utilities/execution.utilities';
 
 import {
   fatalErrorWhilePackingMessage,
@@ -11,41 +9,44 @@ import {
   packagePackedMessage,
   packagePackingStartedMessage,
 } from './pack.messages';
+import { ensurePackPathsExist, findPackedArchive, resolvePackPaths } from './pack.validation';
 
 /** Packs the prepared contract package directory into an npm tarball. */
 export async function packContractPackage(): Promise<void> {
   try {
+    // Step 1: Start pack flow.
     packagePackingStartedMessage();
 
-    const packageDir = path.join(process.cwd(), CONTRACT_DIRECTORY_NAME, 'package');
-    const packageJsonPath = path.join(packageDir, 'package.json');
+    // Step 2: Resolve and validate prepared package paths.
+    const paths = resolvePackPaths();
+    try {
+      await ensurePackPathsExist(paths);
+    } catch (error) {
+      const code = error instanceof Error ? error.message : String(error);
+      if (code === 'PACKAGE_DIR_NOT_FOUND') {
+        packageDirectoryNotFoundMessage();
+        process.exit(1);
+      }
 
-    // Verify package directory exists
-    const packageDirExists = await fs.pathExists(packageDir);
-    if (!packageDirExists) {
-      packageDirectoryNotFoundMessage();
-      process.exit(1);
+      if (code === 'PACKAGE_JSON_NOT_FOUND') {
+        packageJsonNotFoundMessage();
+        process.exit(1);
+      }
+
+      throw error;
     }
 
-    // Verify package.json exists
-    const packageJsonExists = await fs.pathExists(packageJsonPath);
-    if (!packageJsonExists) {
-      packageJsonNotFoundMessage();
-      process.exit(1);
-    }
-
-    // Run npm pack from the package directory
-    const executed = await executeCommand('npm', ['pack'], packageDir);
+    // Step 3: Run npm pack inside prepared package directory.
+    const executed = await executeCommand('npm', ['pack'], paths.packageDir);
     if (!executed) {
       process.exit(1);
     }
 
-    // Find the created .tgz file
-    const files = await fs.readdir(packageDir);
-    const tgzFile = files.find((f) => f.endsWith('.tgz'));
+    // Step 4: Detect produced archive and report success.
+    const tgzFile = await findPackedArchive(paths.packageDir);
 
     if (tgzFile) {
-      const tgzPath = path.join(packageDir, tgzFile);
+      const tgzPath = path.join(paths.packageDir, tgzFile);
       packagePackedMessage(tgzFile, tgzPath);
     }
   } catch (error) {

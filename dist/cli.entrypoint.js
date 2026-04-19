@@ -4,7 +4,13 @@
 import { Cli } from "clipanion";
 
 // src/library.metadata.ts
-var libraryMetadata = { name: "contract", version: "0.1.0" };
+import { createRequire } from "module";
+var require2 = createRequire(import.meta.url);
+var packageMetadata = require2("../package.json");
+var libraryMetadata = {
+  name: packageMetadata.name,
+  version: packageMetadata.version
+};
 
 // src/adapters/clipanion.client.ts
 function getClipanionClient() {
@@ -19,7 +25,7 @@ function getClipanionClient() {
 import { Command } from "clipanion";
 
 // src/environment/environment.services.ts
-import fs2 from "fs-extra";
+import fs3 from "fs-extra";
 import path3 from "path";
 
 // src/environment/environment.chat.ts
@@ -40,7 +46,8 @@ async function configFileCreationPrompt() {
 }
 var environmentClearedMessage = () => log.success("Existing contract environment cleared.");
 var invalidConfigMessage = (configPath, errorMessage) => log.error(`Invalid config format at ${configPath}: ${errorMessage}`);
-var configFileNotFoundMessage = (configPath) => log.warn(`Config not found at ${configPath}, running initialization script.`);
+var configFileNotFoundMessage = (configPath) => log.warn(`Config not found at ${configPath}.`);
+var configFileLoadFailedMessage = (configPath, errorMessage) => log.error(`Failed to load config at ${configPath}: ${errorMessage}`);
 
 // src/environment/environment.constants.ts
 var CONFIG_FILE_NAME = "contract.config.ts";
@@ -95,17 +102,34 @@ async function inspectContractEnvironment(config, contractFolderPath) {
 }
 
 // src/environment/environment.loader.ts
+import fs2 from "fs-extra";
 import path2 from "path";
+import { pathToFileURL } from "url";
+function resolveConfigModulePath(configPath) {
+  return path2.join(process.cwd(), configPath);
+}
+async function resolveConfigModuleUrl(modulePath) {
+  const fileUrl = pathToFileURL(modulePath);
+  const stat = await fs2.stat(modulePath);
+  fileUrl.searchParams.set("t", String(stat.mtimeMs));
+  return fileUrl.href;
+}
 async function loadConfigFile(configPath) {
+  const modulePath = resolveConfigModulePath(configPath);
+  if (!await fs2.pathExists(modulePath)) {
+    configFileNotFoundMessage(configPath);
+    return null;
+  }
   try {
-    const modulePath = path2.join(process.cwd(), configPath);
-    const configModule = await import(modulePath);
+    const moduleUrl = await resolveConfigModuleUrl(modulePath);
+    const configModule = await import(moduleUrl);
     const config = await ConfigSchema.safeParseAsync(configModule.default);
     if (config.success)
       return config.data;
     invalidConfigMessage(configPath, config.error.message);
-  } catch {
-    configFileNotFoundMessage(configPath);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    configFileLoadFailedMessage(configPath, errorMessage);
   }
   return null;
 }
@@ -139,6 +163,33 @@ var renderManifestTemplate = (contractName) => `// Define and export all types r
 `;
 
 // src/environment/environment.services.ts
+function getContractRootPath() {
+  return path3.join(process.cwd(), CONTRACT_DIRECTORY_NAME);
+}
+function getConfigFilePath() {
+  return path3.resolve(CONFIG_FILE_NAME);
+}
+async function ensureEnvironmentDirectories(contractFolderPath, environmentStatus) {
+  if (!environmentStatus.contractDirectoryExists) {
+    await fs3.ensureDir(contractFolderPath);
+    environmentStatus.contractDirectoryExists = true;
+  }
+  for (const dir of ENVIRONMENT_DIRECTORIES) {
+    if (!environmentStatus.directoriesExistence[dir]) {
+      await fs3.ensureDir(path3.join(contractFolderPath, dir));
+      environmentStatus.directoriesExistence[dir] = true;
+    }
+  }
+}
+async function ensureManifestFiles(contractFolderPath, environmentStatus) {
+  for (const [contract, exists] of Object.entries(environmentStatus.manifestsExistence)) {
+    if (!exists) {
+      const manifestFilePath = path3.join(contractFolderPath, "manifests", `contract.${contract}.manifest.ts`);
+      await Bun.write(manifestFilePath, renderManifestTemplate(contract));
+      environmentStatus.manifestsExistence[contract] = true;
+    }
+  }
+}
 async function createDefaultConfigFile() {
   const defaultConfig = ConfigSchema.parse({
     contracts: DEFAULT_CONTRACTS,
@@ -158,79 +209,72 @@ async function getConfig() {
   return config;
 }
 async function handleEnvironment(config) {
-  const contractFolderPath = path3.join(process.cwd(), CONTRACT_DIRECTORY_NAME);
+  const contractFolderPath = getContractRootPath();
   const environmentStatus = await inspectContractEnvironment(config, contractFolderPath);
-  if (!environmentStatus.contractDirectoryExists) {
-    fs2.mkdirpSync(contractFolderPath);
-    environmentStatus.contractDirectoryExists = true;
-  }
-  for (const dir of ENVIRONMENT_DIRECTORIES) {
-    if (!environmentStatus.directoriesExistence[dir]) {
-      fs2.mkdirpSync(path3.join(contractFolderPath, dir));
-      environmentStatus.directoriesExistence[dir] = true;
-    }
-  }
-  const manifestsExistenceEntries = Object.entries(environmentStatus.manifestsExistence);
-  for (const [contract, exists] of manifestsExistenceEntries) {
-    if (!exists) {
-      const manifestFilePath = path3.join(contractFolderPath, "manifests", `contract.${contract}.manifest.ts`);
-      await Bun.write(manifestFilePath, renderManifestTemplate(contract));
-      environmentStatus.manifestsExistence[contract] = true;
-    }
-  }
+  await ensureEnvironmentDirectories(contractFolderPath, environmentStatus);
+  await ensureManifestFiles(contractFolderPath, environmentStatus);
   return environmentStatus;
 }
 async function clearEnvironment() {
-  const contractFolderPath = path3.join(process.cwd(), CONTRACT_DIRECTORY_NAME);
-  await fs2.remove(contractFolderPath);
+  const contractFolderPath = getContractRootPath();
+  await fs3.remove(contractFolderPath);
   environmentClearedMessage();
 }
 async function updateConfigVersion(newVersion) {
-  const configPath = path3.resolve(CONFIG_FILE_NAME);
-  const content = await fs2.readFile(configPath, "utf-8");
-  const versionRegex = /version:\s*['"][\d.]+['"]/;
-  const replacement = `version: '${newVersion}'`;
-  if (!versionRegex.test(content)) {
+  const configPath = getConfigFilePath();
+  const content = await fs3.readFile(configPath, "utf-8");
+  const packageVersionRegex = /(package:\s*\{[\s\S]*?version:\s*['"])([^'"]+)(['"])/;
+  if (!packageVersionRegex.test(content)) {
     throw new Error(`Could not find version field in ${configPath}`);
   }
-  const updatedContent = content.replace(versionRegex, replacement);
-  await fs2.writeFile(configPath, updatedContent, "utf-8");
+  const updatedContent = content.replace(packageVersionRegex, `$1${newVersion}$3`);
+  await fs3.writeFile(configPath, updatedContent, "utf-8");
 }
 
-// src/modules/build/build.services.ts
+// src/modules/build/build.bundle.ts
 import { spinner } from "@clack/prompts";
-import path4 from "path";
 
-// src/utilities/exec.utilities.ts
+// src/utilities/execution.utilities.ts
 import { log as log2 } from "@clack/prompts";
 import { execa } from "execa";
+function createOutputBuffer() {
+  return { stdout: "", stderr: "" };
+}
+function appendChunk(target, buffer, chunk) {
+  buffer[target] += String(chunk);
+}
+function attachOutputListeners(subprocess, buffer) {
+  subprocess.stdout?.on("data", (chunk) => appendChunk("stdout", buffer, chunk));
+  subprocess.stderr?.on("data", (chunk) => appendChunk("stderr", buffer, chunk));
+}
+function createFailedResult(buffer, error) {
+  return {
+    success: false,
+    stdout: buffer.stdout,
+    stderr: buffer.stderr,
+    errorMessage: error instanceof Error ? error.message : String(error)
+  };
+}
+function createSuccessResult(buffer) {
+  return { success: true, stdout: buffer.stdout, stderr: buffer.stderr };
+}
 async function executeCommandWithResult(command, args, cwd) {
-  let stdout = "";
-  let stderr = "";
+  const output = createOutputBuffer();
   try {
     const subprocess = execa(command, args, { stdio: ["ignore", "pipe", "pipe"], shell: true, cwd });
-    subprocess.stdout?.on("data", (data) => {
-      stdout += String(data);
-    });
-    subprocess.stderr?.on("data", (data) => {
-      stderr += String(data);
-    });
+    attachOutputListeners(subprocess, output);
     await subprocess;
-    return { success: true, stdout, stderr };
+    return createSuccessResult(output);
   } catch (error) {
-    return {
-      success: false,
-      stdout,
-      stderr,
-      errorMessage: error instanceof Error ? error.message : String(error)
-    };
+    return createFailedResult(output, error);
   }
 }
 async function executeCommand(command, args, cwd) {
   const result = await executeCommandWithResult(command, args, cwd);
   if (!result.success) {
+    const errorMessage = result.stderr || result.stdout || result.errorMessage || "Unknown error";
     log2.error(`Error executing command: ${command} ${args.join(" ")}
-${result.stderr || result.stdout || result.errorMessage}`);
+${errorMessage}`);
     return false;
   }
   return true;
@@ -243,19 +287,31 @@ var bundlingStartedMessage = (contract) => `Bundling contract declarations for $
 var bundlingCompletedMessage = (contract, outputPath) => `Contract declarations bundled successfully for ${green(contract)}, output available at: ${dim(outputPath)}`;
 var contractsBuildCompletedMessage = () => log3.success(`All contract declarations have been bundled successfully.`);
 
-// src/modules/build/build.services.ts
-async function bundleContractDeclaration(app, contract) {
+// src/modules/build/build.paths.ts
+import path4 from "path";
+function resolveContractBundlePaths(app, contract) {
   const input = path4.join(CONTRACT_DIRECTORY_NAME, "manifests", `contract.${contract}.manifest.ts`);
   const output = path4.join(CONTRACT_DIRECTORY_NAME, "generated", `${app}.contract.${contract}.d.ts`);
+  return { input, output };
+}
+
+// src/modules/build/build.bundle.ts
+async function bundleContractDeclaration(app, contract) {
+  const paths = resolveContractBundlePaths(app, contract);
   const progressSpinner = spinner();
   progressSpinner.start(bundlingStartedMessage(contract));
-  const executed = await executeCommand("npx", ["dts-bundle-generator", "-o", output, input, "--no-check"]);
-  if (!executed)
+  const executed = await executeCommand("npx", ["dts-bundle-generator", "-o", paths.output, paths.input, "--no-check"]);
+  if (!executed) {
     process.exit(1);
-  progressSpinner.stop(bundlingCompletedMessage(contract, output));
+  }
+  progressSpinner.stop(bundlingCompletedMessage(contract, paths.output));
 }
+
+// src/modules/build/build.services.ts
 async function bundleAllContractDeclarations(config) {
-  await Promise.all(config.contracts.map((contract) => bundleContractDeclaration(config.app, contract)));
+  for (const contract of config.contracts) {
+    await bundleContractDeclaration(config.app, contract);
+  }
   contractsBuildCompletedMessage();
 }
 
@@ -283,25 +339,35 @@ var environmentUpdateCompletedMessage = () => log4.success(`Manifest pulling and
 You can now export your contract's types in relevant manifest files.
 Then generate the type definitions by running ${green2("contract build")}.`);
 
+// src/modules/init/init.services.ts
+async function initializeContractProject() {
+  const shouldInitialize = await initializePrompt();
+  if (!shouldInitialize) {
+    initializationCancelledMessage();
+    return;
+  }
+  await clearEnvironment();
+  const config = await createDefaultConfigFile();
+  await handleEnvironment(config);
+  initializationCompletedMessage();
+}
+async function updateContractEnvironment() {
+  const config = await getConfig();
+  await handleEnvironment(config);
+  environmentUpdateCompletedMessage();
+}
+
 // src/modules/init/init.commands.ts
 var InitCommand = class extends Command2 {
   static paths = [["init"]];
   async execute() {
-    const shouldInitialize = await initializePrompt();
-    if (!shouldInitialize)
-      return initializationCancelledMessage();
-    await clearEnvironment();
-    const config = await createDefaultConfigFile();
-    await handleEnvironment(config);
-    initializationCompletedMessage();
+    await initializeContractProject();
   }
 };
 var UpdateEnvironmentCommand = class extends Command2 {
   static paths = [["update:environment"]];
   async execute() {
-    const config = await getConfig();
-    await handleEnvironment(config);
-    environmentUpdateCompletedMessage();
+    await updateContractEnvironment();
   }
 };
 
@@ -309,8 +375,7 @@ var UpdateEnvironmentCommand = class extends Command2 {
 import { Command as Command3 } from "clipanion";
 
 // src/modules/pack/pack.services.ts
-import fs3 from "fs-extra";
-import path5 from "path";
+import path6 from "path";
 
 // src/modules/pack/pack.messages.ts
 import { log as log5 } from "@clack/prompts";
@@ -321,30 +386,53 @@ var packageDirectoryNotFoundMessage = () => log5.error(`Contract package directo
 var packageJsonNotFoundMessage = () => log5.error(`Package metadata not found. Run ${green3("contract prepare:package")} first.`);
 var fatalErrorWhilePackingMessage = (error) => log5.error(`Fatal error while packing package: ${error}`);
 
+// src/modules/pack/pack.validation.ts
+import fs4 from "fs-extra";
+import path5 from "path";
+function resolvePackPaths() {
+  const packageDir = path5.join(process.cwd(), CONTRACT_DIRECTORY_NAME, "package");
+  const packageJsonPath = path5.join(packageDir, "package.json");
+  return { packageDir, packageJsonPath };
+}
+async function ensurePackPathsExist(paths) {
+  if (!await fs4.pathExists(paths.packageDir)) {
+    throw new Error("PACKAGE_DIR_NOT_FOUND");
+  }
+  if (!await fs4.pathExists(paths.packageJsonPath)) {
+    throw new Error("PACKAGE_JSON_NOT_FOUND");
+  }
+}
+async function findPackedArchive(packageDir) {
+  const files = await fs4.readdir(packageDir);
+  return files.find((file) => file.endsWith(".tgz")) ?? null;
+}
+
 // src/modules/pack/pack.services.ts
 async function packContractPackage() {
   try {
     packagePackingStartedMessage();
-    const packageDir = path5.join(process.cwd(), CONTRACT_DIRECTORY_NAME, "package");
-    const packageJsonPath = path5.join(packageDir, "package.json");
-    const packageDirExists = await fs3.pathExists(packageDir);
-    if (!packageDirExists) {
-      packageDirectoryNotFoundMessage();
-      process.exit(1);
+    const paths = resolvePackPaths();
+    try {
+      await ensurePackPathsExist(paths);
+    } catch (error) {
+      const code = error instanceof Error ? error.message : String(error);
+      if (code === "PACKAGE_DIR_NOT_FOUND") {
+        packageDirectoryNotFoundMessage();
+        process.exit(1);
+      }
+      if (code === "PACKAGE_JSON_NOT_FOUND") {
+        packageJsonNotFoundMessage();
+        process.exit(1);
+      }
+      throw error;
     }
-    const packageJsonExists = await fs3.pathExists(packageJsonPath);
-    if (!packageJsonExists) {
-      packageJsonNotFoundMessage();
-      process.exit(1);
-    }
-    const executed = await executeCommand("npm", ["pack"], packageDir);
+    const executed = await executeCommand("npm", ["pack"], paths.packageDir);
     if (!executed) {
       process.exit(1);
     }
-    const files = await fs3.readdir(packageDir);
-    const tgzFile = files.find((f) => f.endsWith(".tgz"));
+    const tgzFile = await findPackedArchive(paths.packageDir);
     if (tgzFile) {
-      const tgzPath = path5.join(packageDir, tgzFile);
+      const tgzPath = path6.join(paths.packageDir, tgzFile);
       packagePackedMessage(tgzFile, tgzPath);
     }
   } catch (error) {
@@ -366,33 +454,28 @@ var PackPackageCommand = class extends Command3 {
 import { Command as Command4, Option } from "clipanion";
 
 // src/modules/prepare/prepare.services.ts
+import path10 from "path";
+
+// src/modules/versioning/versioning.hash.ts
+import crypto from "crypto";
 import fs5 from "fs-extra";
 import path7 from "path";
 
-// src/utilities/version.utilities.ts
-import crypto from "crypto";
-import fs4 from "fs-extra";
-import path6 from "path";
-var PUBLISHABLE_FILES = ["index.d.ts", "index.js"];
-function isRecord(value) {
-  return typeof value === "object" && value !== null;
-}
-function toContractState(value) {
-  if (!isRecord(value) || typeof value.hash !== "string") {
-    return null;
-  }
-  return { hash: value.hash };
-}
+// src/modules/versioning/versioning.constants.ts
+var PUBLISHABLE_FILES = ["package.json", "index.d.ts", "index.js"];
+var CONTRACT_PACKAGE_STATE_FILE = ".contract-package-state.json";
+
+// src/modules/versioning/versioning.hash.ts
 function addContractFiles(contracts) {
-  return [...PUBLISHABLE_FILES, ...contracts.flatMap((c) => [`${c}.d.ts`, `${c}.js`])];
+  return [...PUBLISHABLE_FILES, ...contracts.flatMap((contract) => [`${contract}.d.ts`, `${contract}.js`])];
 }
 async function computePackageHash(packageDir, contracts) {
   const hash = crypto.createHash("sha256");
   const filesToHash = addContractFiles(contracts);
   for (const filename of filesToHash.sort()) {
-    const filePath = path6.join(packageDir, filename);
+    const filePath = path7.join(packageDir, filename);
     try {
-      let content = await fs4.readFile(filePath, "utf-8");
+      let content = await fs5.readFile(filePath, "utf-8");
       if (filename === "package.json") {
         const json = JSON.parse(content);
         delete json.version;
@@ -406,12 +489,31 @@ async function computePackageHash(packageDir, contracts) {
   }
   return hash.digest("hex");
 }
+
+// src/modules/versioning/versioning.state.ts
+import fs6 from "fs-extra";
+import path8 from "path";
+
+// src/utilities/type.utilities.ts
+function isRecord(value) {
+  return typeof value === "object" && value !== null;
+}
+
+// src/modules/versioning/versioning.state.ts
+function toContractState(value) {
+  if (!isRecord(value) || typeof value.hash !== "string") {
+    return null;
+  }
+  return { hash: value.hash };
+}
+function getStatePath(packageDir) {
+  return path8.join(path8.dirname(packageDir), CONTRACT_PACKAGE_STATE_FILE);
+}
 async function getContractState(packageDir) {
-  const stateDir = path6.dirname(packageDir);
-  const statePath = path6.join(stateDir, ".contract-package-state.json");
+  const statePath = getStatePath(packageDir);
   try {
-    if (await fs4.pathExists(statePath)) {
-      const rawState = await fs4.readJSON(statePath);
+    if (await fs6.pathExists(statePath)) {
+      const rawState = await fs6.readJSON(statePath);
       return toContractState(rawState);
     }
   } catch {
@@ -420,10 +522,11 @@ async function getContractState(packageDir) {
   return null;
 }
 async function writeContractState(packageDir, state) {
-  const stateDir = path6.dirname(packageDir);
-  const statePath = path6.join(stateDir, ".contract-package-state.json");
-  await fs4.writeJSON(statePath, state, { spaces: 2 });
+  const statePath = getStatePath(packageDir);
+  await fs6.writeJSON(statePath, state, { spaces: 2 });
 }
+
+// src/modules/versioning/versioning.semver.ts
 function bumpVersion(currentVersion, bumpType) {
   const parts = currentVersion.split(".");
   const [major, minor, patch] = [
@@ -441,44 +544,11 @@ function bumpVersion(currentVersion, bumpType) {
   }
 }
 
-// src/modules/prepare/prepare.messages.ts
-import { log as log6 } from "@clack/prompts";
-import { dim as dim3, green as green4 } from "kleur/colors";
-var packagePreparationStartedMessage = (app) => log6.info(`Preparing package ${green4(app)} for distribution...`);
-var packageFilesCreatedMessage = (filePath) => log6.success(`Package files created successfully at ${dim3(filePath)}`);
-var packageJsonGeneratedMessage = (packageName) => log6.success(`Generated ${dim3("package.json")} for ${green4(packageName)}`);
-var packagePreparationCompletedMessage = () => log6.success(`Package preparation completed. Ready for publishing.`);
-var missingGeneratedContractsMessage = (contractName) => log6.warn(`Contract ${green4(contractName)} was not found in generated files. Run ${green4("contract build")} first to generate contract declarations.`);
-var versionBumpedMessage = (oldVersion, newVersion, reason) => log6.success(`Version bumped from ${green4(oldVersion)} to ${green4(newVersion)} (${reason}).`);
-var versionForcedMessage = (newVersion, bumpType) => log6.success(`Version forced to ${green4(newVersion)} via --bump ${bumpType}.`);
-var versionNoChangeMessage = (version) => log6.info(`Content unchanged. Version remains ${green4(version)}.`);
-var fatalErrorWhilePreparingPackageMessage = (error) => log6.error(`Fatal error while preparing package: ${error}`);
-
-// src/modules/prepare/prepare.services.ts
-async function collectGeneratedContracts(config) {
-  const contractsMap = /* @__PURE__ */ new Map();
-  const generatedDir = path7.join(process.cwd(), CONTRACT_DIRECTORY_NAME, "generated");
-  for (const contract of config.contracts) {
-    const contractFileName = `${config.app}.contract.${contract}.d.ts`;
-    const contractFilePath = path7.join(generatedDir, contractFileName);
-    try {
-      const exists = await fs5.pathExists(contractFilePath);
-      contractsMap.set(contract, exists);
-      if (!exists) {
-        missingGeneratedContractsMessage(contract);
-      }
-    } catch (_error) {
-      contractsMap.set(contract, false);
-    }
-  }
-  return contractsMap;
-}
-function generateIndexDts(contracts) {
-  const exports = contracts.map((contract) => `export type * from './${contract}';`).join("\n");
-  return exports;
-}
-function generateStubJs() {
-  return "export {};";
+// src/modules/prepare/prepare.artifacts.ts
+import fs7 from "fs-extra";
+import path9 from "path";
+function getGeneratedDirPath() {
+  return path9.join(process.cwd(), CONTRACT_DIRECTORY_NAME, "generated");
 }
 function generatePackageJson(config, contracts) {
   const exports = {
@@ -505,62 +575,116 @@ function generatePackageJson(config, contracts) {
     types: "./index.d.ts"
   };
 }
-async function updatePackageVersion(packageJsonPath, newVersion) {
-  const packageJson = await fs5.readJSON(packageJsonPath);
-  packageJson.version = newVersion;
-  await fs5.writeJSON(packageJsonPath, packageJson, { spaces: 2 });
+function generateIndexDts(contracts) {
+  return contracts.map((contract) => `export type * from './${contract}';`).join("\n");
 }
+function generateStubJs() {
+  return "export {};";
+}
+async function collectExistingGeneratedContracts(config, onMissing) {
+  const generatedDir = getGeneratedDirPath();
+  const existing = [];
+  for (const contract of config.contracts) {
+    const contractFileName = `${config.app}.contract.${contract}.d.ts`;
+    const contractFilePath = path9.join(generatedDir, contractFileName);
+    try {
+      if (await fs7.pathExists(contractFilePath)) {
+        existing.push(contract);
+      } else {
+        onMissing(contract);
+      }
+    } catch {
+      onMissing(contract);
+    }
+  }
+  return existing;
+}
+async function writePreparedArtifacts(config, packageDir, contracts) {
+  const generatedDir = getGeneratedDirPath();
+  await fs7.remove(packageDir);
+  await fs7.ensureDir(packageDir);
+  for (const contract of contracts) {
+    const sourceFile = path9.join(generatedDir, `${config.app}.contract.${contract}.d.ts`);
+    const destFile = path9.join(packageDir, `${contract}.d.ts`);
+    const content = await fs7.readFile(sourceFile, "utf-8");
+    await fs7.writeFile(destFile, content);
+  }
+  await fs7.writeFile(path9.join(packageDir, "index.d.ts"), generateIndexDts(contracts));
+  const jsStub = generateStubJs();
+  await fs7.writeFile(path9.join(packageDir, "index.js"), jsStub);
+  for (const contract of contracts) {
+    await fs7.writeFile(path9.join(packageDir, `${contract}.js`), jsStub);
+  }
+  const packageJson = generatePackageJson(config, contracts);
+  const packageJsonPath = path9.join(packageDir, "package.json");
+  await fs7.writeJSON(packageJsonPath, packageJson, { spaces: 2 });
+  return { packageJsonPath, baseVersion: String(packageJson.version) };
+}
+async function updatePackageVersion(packageJsonPath, newVersion) {
+  const packageJson = await fs7.readJSON(packageJsonPath);
+  packageJson.version = newVersion;
+  await fs7.writeJSON(packageJsonPath, packageJson, { spaces: 2 });
+}
+
+// src/modules/prepare/prepare.messages.ts
+import { log as log6 } from "@clack/prompts";
+import { dim as dim3, green as green4 } from "kleur/colors";
+var packagePreparationStartedMessage = (app) => log6.info(`Preparing package ${green4(app)} for distribution...`);
+var packageFilesCreatedMessage = (filePath) => log6.success(`Package files created successfully at ${dim3(filePath)}`);
+var packageJsonGeneratedMessage = (packageName) => log6.success(`Generated ${dim3("package.json")} for ${green4(packageName)}`);
+var packagePreparationCompletedMessage = () => log6.success(`Package preparation completed. Ready for publishing.`);
+var missingGeneratedContractsMessage = (contractName) => log6.warn(`Contract ${green4(contractName)} was not found in generated files. Run ${green4("contract build")} first to generate contract declarations.`);
+var versionBumpedMessage = (oldVersion, newVersion, reason) => log6.success(`Version bumped from ${green4(oldVersion)} to ${green4(newVersion)} (${reason}).`);
+var versionForcedMessage = (newVersion, bumpType) => log6.success(`Version forced to ${green4(newVersion)} via --bump ${bumpType}.`);
+var versionNoChangeMessage = (version) => log6.info(`Content unchanged. Version remains ${green4(version)}.`);
+var fatalErrorWhilePreparingPackageMessage = (error) => log6.error(`Fatal error while preparing package: ${error}`);
+
+// src/modules/prepare/prepare.versioning.ts
+async function applyPrepareVersioning(context) {
+  const { config, packageDir, packageJsonPath, contracts, baseVersion, previousHash, options } = context;
+  if (options.bump) {
+    const bumpedVersion = bumpVersion(baseVersion, options.bump);
+    await updateConfigVersion(bumpedVersion);
+    await updatePackageVersion(packageJsonPath, bumpedVersion);
+    versionForcedMessage(bumpedVersion, options.bump);
+    return;
+  }
+  if (options.noBump) {
+    return;
+  }
+  const currentHash = await computePackageHash(packageDir, contracts);
+  if (previousHash && previousHash !== currentHash) {
+    const bumpedVersion = bumpVersion(baseVersion, "patch");
+    await updateConfigVersion(bumpedVersion);
+    await updatePackageVersion(packageJsonPath, bumpedVersion);
+    versionBumpedMessage(config.package.version, bumpedVersion, "content changed");
+  } else {
+    versionNoChangeMessage(baseVersion);
+  }
+  await writeContractState(packageDir, { hash: currentHash });
+}
+
+// src/modules/prepare/prepare.services.ts
 async function prepareContractPackage(config, options = {}) {
   try {
     packagePreparationStartedMessage(config.app);
-    const contractsMap = await collectGeneratedContracts(config);
-    const existingContracts = config.contracts.filter((contract) => contractsMap.get(contract) === true);
+    const existingContracts = await collectExistingGeneratedContracts(config, missingGeneratedContractsMessage);
     if (existingContracts.length === 0) {
       throw new Error('No generated contracts found. Run "contract build" first.');
     }
-    const packageDir = path7.join(process.cwd(), CONTRACT_DIRECTORY_NAME, "package");
+    const packageDir = path10.join(process.cwd(), CONTRACT_DIRECTORY_NAME, "package");
     const previousState = await getContractState(packageDir);
-    await fs5.remove(packageDir);
-    await fs5.ensureDir(packageDir);
-    const generatedDir = path7.join(process.cwd(), CONTRACT_DIRECTORY_NAME, "generated");
-    for (const contract of existingContracts) {
-      const sourceFile = path7.join(generatedDir, `${config.app}.contract.${contract}.d.ts`);
-      const destFile = path7.join(packageDir, `${contract}.d.ts`);
-      const content = await fs5.readFile(sourceFile, "utf-8");
-      await fs5.writeFile(destFile, content);
-    }
+    const { packageJsonPath, baseVersion } = await writePreparedArtifacts(config, packageDir, existingContracts);
     packageFilesCreatedMessage(packageDir);
-    const indexDts = generateIndexDts(existingContracts);
-    await fs5.writeFile(path7.join(packageDir, "index.d.ts"), indexDts);
-    const jsStub = generateStubJs();
-    await fs5.writeFile(path7.join(packageDir, "index.js"), jsStub);
-    for (const contract of existingContracts) {
-      await fs5.writeFile(path7.join(packageDir, `${contract}.js`), jsStub);
-    }
-    const packageJson = generatePackageJson(config, existingContracts);
-    const version = String(packageJson.version);
-    packageJson.version = version;
-    const packageJsonPath = path7.join(packageDir, "package.json");
-    await fs5.writeJSON(packageJsonPath, packageJson, { spaces: 2 });
-    if (options.bump) {
-      const bumpedVersion = bumpVersion(version, options.bump);
-      await updateConfigVersion(bumpedVersion);
-      await updatePackageVersion(packageJsonPath, bumpedVersion);
-      versionForcedMessage(bumpedVersion, options.bump);
-    } else if (!options.noBump) {
-      const currentHash = await computePackageHash(packageDir, existingContracts);
-      if (previousState && previousState.hash !== currentHash) {
-        const bumpedVersion = bumpVersion(version, "patch");
-        await updateConfigVersion(bumpedVersion);
-        await updatePackageVersion(packageJsonPath, bumpedVersion);
-        versionBumpedMessage(config.package.version, bumpedVersion, "content changed");
-      } else if (!previousState) {
-        versionNoChangeMessage(version);
-      } else {
-        versionNoChangeMessage(version);
-      }
-      await writeContractState(packageDir, { hash: currentHash });
-    }
+    await applyPrepareVersioning({
+      config,
+      packageDir,
+      packageJsonPath,
+      contracts: existingContracts,
+      baseVersion,
+      previousHash: previousState?.hash ?? null,
+      options
+    });
     packageJsonGeneratedMessage(config.package.name);
     packagePreparationCompletedMessage();
   } catch (error) {
@@ -592,9 +716,42 @@ var PreparePackageCommand = class extends Command4 {
 // src/modules/publish/publish.commands.ts
 import { Command as Command5, Option as Option2 } from "clipanion";
 
-// src/modules/publish/publish.services.ts
-import fs6 from "fs-extra";
-import path8 from "path";
+// src/modules/publish/publish.auth.ts
+import fs8 from "fs-extra";
+import path11 from "path";
+function resolveNpmToken(config) {
+  if (config.npm?.token)
+    return { source: "config", token: config.npm.token };
+  if (process.env.NPM_TOKEN)
+    return { source: "NPM_TOKEN", token: process.env.NPM_TOKEN };
+  if (process.env.NODE_AUTH_TOKEN)
+    return { source: "NODE_AUTH_TOKEN", token: process.env.NODE_AUTH_TOKEN };
+  return null;
+}
+async function writeNpmRc(packageDir, token) {
+  const npmrcPath = path11.join(packageDir, ".npmrc");
+  await fs8.writeFile(npmrcPath, `//registry.npmjs.org/:_authToken=${token}
+`);
+}
+async function removeNpmRc(packageDir) {
+  const npmrcPath = path11.join(packageDir, ".npmrc");
+  await fs8.remove(npmrcPath);
+}
+
+// src/modules/publish/publish.errors.ts
+function getPublishFailureMessage(output) {
+  const normalizedOutput = output.toLowerCase();
+  if (normalizedOutput.includes("eneedauth") || normalizedOutput.includes("e401") || normalizedOutput.includes("403") || normalizedOutput.includes("auth")) {
+    return `NPM publish failed due to authentication or permission issues. Verify the token and package access settings.
+${output}`;
+  }
+  if (normalizedOutput.includes("registry")) {
+    return `NPM publish failed due to registry configuration. Verify the package is being published to npmjs.org.
+${output}`;
+  }
+  return `NPM publish failed.
+${output}`;
+}
 
 // src/modules/publish/publish.messages.ts
 import { log as log7 } from "@clack/prompts";
@@ -609,46 +766,52 @@ var npmTokenSourceMessage = (source) => log7.success(`Using npm token from ${gre
 var publishingPackageMessage = (packageName, version) => log7.success(`Publishing ${green5(`${packageName}@${version}`)}.`);
 var fatalErrorWhilePublishingMessage = (error) => log7.error(`Fatal error while publishing package: ${error}`);
 
-// src/modules/publish/publish.services.ts
-function resolveNpmToken(config) {
-  if (config.npm?.token)
-    return { source: "config", token: config.npm.token };
-  if (process.env.NPM_TOKEN)
-    return { source: "NPM_TOKEN", token: process.env.NPM_TOKEN };
-  if (process.env.NODE_AUTH_TOKEN)
-    return { source: "NODE_AUTH_TOKEN", token: process.env.NODE_AUTH_TOKEN };
-  return null;
-}
-async function writeNpmRc(packageDir, token) {
-  const npmrcPath = path8.join(packageDir, ".npmrc");
-  await fs6.writeFile(npmrcPath, `//registry.npmjs.org/:_authToken=${token}
-`);
-}
-function getPublishFailureMessage(output) {
-  const normalizedOutput = output.toLowerCase();
-  if (normalizedOutput.includes("eneedauth") || normalizedOutput.includes("e401") || normalizedOutput.includes("403") || normalizedOutput.includes("auth")) {
-    return `NPM publish failed due to authentication or permission issues. Verify the token and package access settings.
-${output}`;
-  }
-  if (normalizedOutput.includes("registry")) {
-    return `NPM publish failed due to registry configuration. Verify the package is being published to npmjs.org.
-${output}`;
-  }
-  return `NPM publish failed.
-${output}`;
-}
+// src/modules/publish/publish.registry.ts
 async function versionExistsOnNpm(packageName, version) {
   const checkResult = await executeCommandWithResult("npm", ["view", `${packageName}@${version}`]);
   return checkResult.success;
 }
-async function resolveVersionCollision(packageName, version) {
+async function assertVersionAvailableOnNpm(packageName, version) {
   const exists = await versionExistsOnNpm(packageName, version);
   if (exists) {
     throw new Error(`Version ${version} already exists on npm. Cannot publish duplicate version.
 Run "contract prepare:package --bump patch" to bump the version, then try publishing again.`);
   }
 }
+
+// src/modules/publish/publish.validation.ts
+import fs9 from "fs-extra";
+import path12 from "path";
+function resolvePublishPaths() {
+  const packageDir = path12.resolve(CONTRACT_DIRECTORY_NAME, "package");
+  const packageJsonPath = path12.join(packageDir, "package.json");
+  return { packageDir, packageJsonPath };
+}
+async function ensurePublishPathsExist(paths) {
+  if (!await fs9.pathExists(paths.packageDir)) {
+    throw new Error("PACKAGE_DIR_NOT_FOUND");
+  }
+  if (!await fs9.pathExists(paths.packageJsonPath)) {
+    throw new Error("PACKAGE_JSON_NOT_FOUND");
+  }
+}
+async function readPackageJsonInfo(packageJsonPath) {
+  const packageJson = await fs9.readJSON(packageJsonPath);
+  if (!packageJson.name) {
+    throw new Error('package.json is missing a valid "name" field.');
+  }
+  return packageJson;
+}
+async function syncPackageJsonVersion(packageJsonPath, packageJson, expectedVersion) {
+  if (packageJson.version !== expectedVersion) {
+    packageJson.version = expectedVersion;
+    await fs9.writeJSON(packageJsonPath, packageJson, { spaces: 2 });
+  }
+}
+
+// src/modules/publish/publish.services.ts
 async function publishContractPackage(options = {}) {
+  let packageDirForCleanup = null;
   try {
     packagePublishingStartedMessage();
     const config = await getConfig();
@@ -657,29 +820,27 @@ async function publishContractPackage(options = {}) {
       await handleEnvironment(config);
       await prepareContractPackage(config);
     }
-    const packageDir = path8.resolve(CONTRACT_DIRECTORY_NAME, "package");
-    const packageJsonPath = path8.join(packageDir, "package.json");
-    const packageDirExists = await fs6.pathExists(packageDir);
-    if (!packageDirExists) {
-      packageDirectoryNotFoundMessage2();
-      process.exit(1);
+    const paths = resolvePublishPaths();
+    packageDirForCleanup = paths.packageDir;
+    try {
+      await ensurePublishPathsExist(paths);
+    } catch (error) {
+      const code = error instanceof Error ? error.message : String(error);
+      if (code === "PACKAGE_DIR_NOT_FOUND") {
+        packageDirectoryNotFoundMessage2();
+        process.exit(1);
+      }
+      if (code === "PACKAGE_JSON_NOT_FOUND") {
+        packageJsonNotFoundMessage2();
+        process.exit(1);
+      }
+      throw error;
     }
-    const packageJsonExists = await fs6.pathExists(packageJsonPath);
-    if (!packageJsonExists) {
-      packageJsonNotFoundMessage2();
-      process.exit(1);
-    }
-    const packageJson = await fs6.readJSON(packageJsonPath);
-    if (!packageJson.name) {
-      throw new Error('package.json is missing a valid "name" field.');
-    }
+    const packageJson = await readPackageJsonInfo(paths.packageJsonPath);
     const packageName = packageJson.name;
     const packageVersion = config.package.version;
-    await resolveVersionCollision(packageName, packageVersion);
-    if (packageJson.version !== packageVersion) {
-      packageJson.version = packageVersion;
-      await fs6.writeJSON(packageJsonPath, packageJson, { spaces: 2 });
-    }
+    await assertVersionAvailableOnNpm(packageName, packageVersion);
+    await syncPackageJsonVersion(paths.packageJsonPath, packageJson, packageVersion);
     const npmToken = resolveNpmToken(config);
     if (!npmToken) {
       npmTokenMissingMessage();
@@ -687,11 +848,11 @@ async function publishContractPackage(options = {}) {
     }
     npmTokenSourceMessage(npmToken.source);
     publishingPackageMessage(packageName, packageVersion);
-    await writeNpmRc(packageDir, npmToken.token);
+    await writeNpmRc(paths.packageDir, npmToken.token);
     if (options.access && options.access !== "public") {
       throw new Error("Only --access public is supported for contract publish:package.");
     }
-    const publishResult = await executeCommandWithResult("npm", ["publish", "--access", "public"], packageDir);
+    const publishResult = await executeCommandWithResult("npm", ["publish", "--access", "public"], paths.packageDir);
     if (!publishResult.success) {
       const errorOutput = publishResult.stderr || publishResult.stdout || publishResult.errorMessage || "Unknown error";
       throw new Error(getPublishFailureMessage(errorOutput));
@@ -701,6 +862,10 @@ async function publishContractPackage(options = {}) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     fatalErrorWhilePublishingMessage(errorMessage);
     process.exit(1);
+  } finally {
+    if (packageDirForCleanup) {
+      await removeNpmRc(packageDirForCleanup);
+    }
   }
 }
 
