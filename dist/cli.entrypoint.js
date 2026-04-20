@@ -231,7 +231,7 @@ async function updateConfigVersion(newVersion) {
   await fs3.writeFile(configPath, updatedContent, "utf-8");
 }
 
-// src/modules/build/build.bundle.ts
+// src/modules/build/build.services.ts
 import { spinner } from "@clack/prompts";
 
 // src/utilities/execution.utilities.ts
@@ -280,13 +280,6 @@ ${errorMessage}`);
   return true;
 }
 
-// src/modules/build/build.messages.ts
-import { log as log3 } from "@clack/prompts";
-import { dim, green } from "kleur/colors";
-var bundlingStartedMessage = (contract) => `Bundling contract declarations for ${green(contract)}`;
-var bundlingCompletedMessage = (contract, outputPath) => `Contract declarations bundled successfully for ${green(contract)}, output available at: ${dim(outputPath)}`;
-var contractsBuildCompletedMessage = () => log3.success(`All contract declarations have been bundled successfully.`);
-
 // src/modules/build/build.paths.ts
 import path4 from "path";
 function resolveContractBundlePaths(app, contract) {
@@ -298,21 +291,36 @@ function resolveContractBundlePaths(app, contract) {
 // src/modules/build/build.bundle.ts
 async function bundleContractDeclaration(app, contract) {
   const paths = resolveContractBundlePaths(app, contract);
-  const progressSpinner = spinner();
-  progressSpinner.start(bundlingStartedMessage(contract));
-  const executed = await executeCommand("npx", ["dts-bundle-generator", "-o", paths.output, paths.input, "--no-check"]);
-  if (!executed) {
-    process.exit(1);
-  }
-  progressSpinner.stop(bundlingCompletedMessage(contract, paths.output));
+  return executeCommand("npx", ["dts-bundle-generator", "-o", paths.output, paths.input, "--no-check"]);
 }
+
+// src/modules/build/build.messages.ts
+import { log as log3 } from "@clack/prompts";
+import { green } from "kleur/colors";
+var buildSpinnerStartedMessage = (contractsCount) => `Building ${green(String(contractsCount))} contract declaration(s)...`;
+var buildSpinnerCompletedMessage = (contractsCount) => `Built ${green(String(contractsCount))} contract declaration(s).`;
+var buildSpinnerFailedMessage = () => "Build failed.";
+var fatalErrorWhileBundlingMessage = (error) => log3.error(`Build failed: ${error}`);
 
 // src/modules/build/build.services.ts
 async function bundleAllContractDeclarations(config) {
-  for (const contract of config.contracts) {
-    await bundleContractDeclaration(config.app, contract);
+  const buildSpinner = spinner();
+  try {
+    buildSpinner.start(buildSpinnerStartedMessage(config.contracts.length));
+    for (const contract of config.contracts) {
+      const executed = await bundleContractDeclaration(config.app, contract);
+      if (!executed) {
+        buildSpinner.stop(buildSpinnerFailedMessage());
+        process.exit(1);
+      }
+    }
+    buildSpinner.stop(buildSpinnerCompletedMessage(config.contracts.length));
+  } catch (error) {
+    buildSpinner.stop(buildSpinnerFailedMessage());
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    fatalErrorWhileBundlingMessage(errorMessage);
+    process.exit(1);
   }
-  contractsBuildCompletedMessage();
 }
 
 // src/modules/build/build.commands.ts

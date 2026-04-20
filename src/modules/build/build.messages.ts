@@ -1,13 +1,13 @@
 import { log } from '@clack/prompts';
-import { dim, green } from 'kleur/colors';
+import { green } from 'kleur/colors';
 
-/** Returns text shown when declaration bundling starts for a contract. */
-export const bundlingStartedMessage = (contract: string): string => `Bundling contract declarations for ${green(contract)}`;
-/** Returns text shown when declaration bundling is completed. */
-export const bundlingCompletedMessage = (contract: string, outputPath: string): string =>
-  `Contract declarations bundled successfully for ${green(contract)}, output available at: ${dim(outputPath)}`;
-/** Logs completion of all contract declaration bundling tasks. */
-export const contractsBuildCompletedMessage = (): void => log.success(`All contract declarations have been bundled successfully.`);
-/** Logs a fatal bundling error for a specific contract. */
-export const fatalErrorWhileBundlingMessage = (contract: string): void =>
-  log.error(`Fatal error occurred while bundling contract declarations for ${contract}.`);
+/** Returns spinner text shown when declaration build starts. */
+export const buildSpinnerStartedMessage = (contractsCount: number): string =>
+  `Building ${green(String(contractsCount))} contract declaration(s)...`;
+/** Returns spinner text shown when declaration build succeeds. */
+export const buildSpinnerCompletedMessage = (contractsCount: number): string =>
+  `Built ${green(String(contractsCount))} contract declaration(s).`;
+/** Returns spinner text shown when declaration build fails. */
+export const buildSpinnerFailedMessage = (): string => 'Build failed.';
+/** Logs fatal bundling error details. */
+export const fatalErrorWhileBundlingMessage = (error: string): void => log.error(`Build failed: ${error}`);
