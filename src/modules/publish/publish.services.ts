@@ -31,13 +31,16 @@ export async function publishContractPackage(options: { access?: string; prepare
 
   try {
     // Step 1: Load config.
-    const config = await getConfig();
+    let config = await getConfig();
 
     // Step 2: Optionally prepare package artifacts before publish.
     if (options.prepare) {
       packagePreparationStartedMessage();
       await handleEnvironment(config);
       await prepareContractPackage(config);
+
+      // Re-read config because prepare can bump and persist package.version.
+      config = await getConfig();
     }
 
     // Step 3: Resolve and validate package paths/metadata.

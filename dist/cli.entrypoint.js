@@ -332,12 +332,8 @@ import { Command as Command2 } from "clipanion";
 import { log as log4 } from "@clack/prompts";
 import { green as green2 } from "kleur/colors";
 var initializationCancelledMessage = () => log4.info("Initialization cancelled by user.");
-var initializationCompletedMessage = () => log4.success(`Initialization complete, default configuration file created and environment set up.
-Customize the configuration file ${green2("contract.config.ts")}: enter app's name, define contracts to use, etc.
-Then run ${green2("contract update:environment")} to create manifest files and synchronize the environment.`);
-var environmentUpdateCompletedMessage = () => log4.success(`Manifest pulling and environment synchronization complete.
-You can now export your contract's types in relevant manifest files.
-Then generate the type definitions by running ${green2("contract build")}.`);
+var initializationCompletedMessage = () => log4.success(`Initialized. Edit ${green2("contract.config.ts")} and run ${green2("contract update:environment")}.`);
+var environmentUpdateCompletedMessage = () => log4.success(`Environment synced. Define types in manifests, then run ${green2("contract build")}.`);
 
 // src/modules/init/init.services.ts
 async function initializeContractProject() {
@@ -385,9 +381,9 @@ var packSpinnerStartedMessage = () => "Packing contract package...";
 var packSpinnerCompletedMessage = (filename, filepath) => `Packed ${filename} (${filepath}).`;
 var packSpinnerCompletedFallbackMessage = () => "Packed package successfully.";
 var packSpinnerFailedMessage = () => "Pack failed.";
-var packageDirectoryNotFoundMessage = () => log5.error(`Contract package directory not found. Run ${green3("contract prepare:package")} first.`);
-var packageJsonNotFoundMessage = () => log5.error(`Package metadata not found. Run ${green3("contract prepare:package")} first.`);
-var fatalErrorWhilePackingMessage = (error) => log5.error(`Fatal error while packing package: ${error}`);
+var packageDirectoryNotFoundMessage = () => log5.error(`Package dir missing. Run ${green3("contract prepare:package")}.`);
+var packageJsonNotFoundMessage = () => log5.error(`package.json missing. Run ${green3("contract prepare:package")}.`);
+var fatalErrorWhilePackingMessage = (error) => log5.error(`Pack failed: ${error}`);
 
 // src/modules/pack/pack.validation.ts
 import fs4 from "fs-extra";
@@ -640,13 +636,13 @@ async function updatePackageVersion(packageJsonPath, newVersion) {
 // src/modules/prepare/prepare.messages.ts
 import { log as log6 } from "@clack/prompts";
 import { green as green4 } from "kleur/colors";
-var packagePreparationStartedMessage = (app) => log6.info(`Preparing package ${green4(app)} for distribution...`);
-var packagePreparationCompletedMessage = () => log6.success(`Package preparation completed. Ready for publishing.`);
-var missingGeneratedContractsMessage = (contractName) => log6.warn(`Contract ${green4(contractName)} was not found in generated files. Run ${green4("contract build")} first to generate contract declarations.`);
+var packagePreparationStartedMessage = (app) => log6.info(`Preparing ${green4(app)} package...`);
+var packagePreparationCompletedMessage = () => log6.success("Package ready.");
+var missingGeneratedContractsMessage = (contractName) => log6.warn(`Missing generated contract ${green4(contractName)}. Run ${green4("contract build")}.`);
 var versionBumpedMessage = (oldVersion, newVersion, reason) => log6.success(`Version bumped from ${green4(oldVersion)} to ${green4(newVersion)} (${reason}).`);
 var versionForcedMessage = (newVersion, bumpType) => log6.success(`Version forced to ${green4(newVersion)} via --bump ${bumpType}.`);
-var versionNoChangeMessage = (version) => log6.info(`Content unchanged. Version remains ${green4(version)}.`);
-var fatalErrorWhilePreparingPackageMessage = (error) => log6.error(`Fatal error while preparing package: ${error}`);
+var versionNoChangeMessage = (version) => log6.info(`No changes. Version ${green4(version)}.`);
+var fatalErrorWhilePreparingPackageMessage = (error) => log6.error(`Prepare failed: ${error}`);
 
 // src/modules/prepare/prepare.versioning.ts
 async function applyPrepareVersioning(context) {
@@ -751,16 +747,17 @@ async function removeNpmRc(packageDir) {
 // src/modules/publish/publish.errors.ts
 function getPublishFailureMessage(output) {
   const normalizedOutput = output.toLowerCase();
+  const details = output.trim().split("\n").slice(0, 3).join("\n");
   if (normalizedOutput.includes("eneedauth") || normalizedOutput.includes("e401") || normalizedOutput.includes("403") || normalizedOutput.includes("auth")) {
-    return `NPM publish failed due to authentication or permission issues. Verify the token and package access settings.
-${output}`;
+    return `NPM auth/permission error. Check token and package access.
+${details}`;
   }
   if (normalizedOutput.includes("registry")) {
-    return `NPM publish failed due to registry configuration. Verify the package is being published to npmjs.org.
-${output}`;
+    return `NPM registry error. Verify npmjs.org target.
+${details}`;
   }
   return `NPM publish failed.
-${output}`;
+${details}`;
 }
 
 // src/modules/publish/publish.messages.ts
@@ -769,11 +766,11 @@ import { green as green5 } from "kleur/colors";
 var publishSpinnerStartedMessage = (packageName, version) => `Publishing ${packageName}@${version} to npm...`;
 var publishSpinnerCompletedMessage = (packageName, version) => `Published ${packageName}@${version}.`;
 var publishSpinnerFailedMessage = () => "Publish failed.";
-var packageDirectoryNotFoundMessage2 = () => log7.error(`Contract package directory not found. Run ${green5("contract prepare:package")} first.`);
-var packageJsonNotFoundMessage2 = () => log7.error(`Package metadata not found. Run ${green5("contract prepare:package")} first.`);
-var packagePreparationStartedMessage2 = () => log7.info(`Preparing package before publishing...`);
-var npmTokenMissingMessage = () => log7.error(`No npm token provided. Set config.npm.token or NPM_TOKEN env variable.`);
-var fatalErrorWhilePublishingMessage = (error) => log7.error(`Fatal error while publishing package: ${error}`);
+var packageDirectoryNotFoundMessage2 = () => log7.error(`Package dir missing. Run ${green5("contract prepare:package")}.`);
+var packageJsonNotFoundMessage2 = () => log7.error(`package.json missing. Run ${green5("contract prepare:package")}.`);
+var packagePreparationStartedMessage2 = () => log7.info("Preparing package...");
+var npmTokenMissingMessage = () => log7.error("NPM token missing. Set config.npm.token, NPM_TOKEN, or NODE_AUTH_TOKEN.");
+var fatalErrorWhilePublishingMessage = (error) => log7.error(`Publish failed: ${error}`);
 
 // src/modules/publish/publish.registry.ts
 async function versionExistsOnNpm(packageName, version) {
@@ -823,11 +820,12 @@ async function publishContractPackage(options = {}) {
   let packageDirForCleanup = null;
   let publishSpinner = null;
   try {
-    const config = await getConfig();
+    let config = await getConfig();
     if (options.prepare) {
       packagePreparationStartedMessage2();
       await handleEnvironment(config);
       await prepareContractPackage(config);
+      config = await getConfig();
     }
     const paths = resolvePublishPaths();
     packageDirForCleanup = paths.packageDir;

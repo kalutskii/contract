@@ -13,10 +13,9 @@ export const packSpinnerFailedMessage = (): string => 'Pack failed.';
 
 /** Logs that prepared package directory is missing. */
 export const packageDirectoryNotFoundMessage = (): void =>
-  log.error(`Contract package directory not found. Run ${green('contract prepare:package')} first.`);
+  log.error(`Package dir missing. Run ${green('contract prepare:package')}.`);
 /** Logs that package metadata file is missing. */
 export const packageJsonNotFoundMessage = (): void =>
-  log.error(`Package metadata not found. Run ${green('contract prepare:package')} first.`);
+  log.error(`package.json missing. Run ${green('contract prepare:package')}.`);
 /** Logs fatal pack command failure details. */
-export const fatalErrorWhilePackingMessage = (error: string): void =>
-  log.error(`Fatal error while packing package: ${error}`);
+export const fatalErrorWhilePackingMessage = (error: string): void => log.error(`Pack failed: ${error}`);
