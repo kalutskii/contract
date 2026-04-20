@@ -28,7 +28,7 @@ export async function bundleAllContractDeclarations(config: Config): Promise<voi
     }
 
     // 3) Report success on the same spinner line.
-    buildSpinner.stop(buildSpinnerCompletedMessage(config.contracts.length));
+    buildSpinner.stop(buildSpinnerCompletedMessage(config.contracts));
   } catch (error) {
     buildSpinner.stop(buildSpinnerFailedMessage());
     const errorMessage = error instanceof Error ? error.message : String(error);

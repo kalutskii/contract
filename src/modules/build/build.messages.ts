@@ -5,8 +5,10 @@ import { green } from 'kleur/colors';
 export const buildSpinnerStartedMessage = (contractsCount: number): string =>
   `Building ${green(String(contractsCount))} contract declaration(s)...`;
 /** Returns spinner text shown when declaration build succeeds. */
-export const buildSpinnerCompletedMessage = (contractsCount: number): string =>
-  `Built ${green(String(contractsCount))} contract declaration(s).`;
+export const buildSpinnerCompletedMessage = (contracts: string[]): string => {
+  const names = contracts.join(', ');
+  return `Built ${green(String(contracts.length))} contract declaration(s): ${green(names)}.`;
+};
 /** Returns spinner text shown when declaration build fails. */
 export const buildSpinnerFailedMessage = (): string => 'Build failed.';
 /** Logs fatal bundling error details. */

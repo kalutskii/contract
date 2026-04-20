@@ -298,7 +298,10 @@ async function bundleContractDeclaration(app, contract) {
 import { log as log3 } from "@clack/prompts";
 import { green } from "kleur/colors";
 var buildSpinnerStartedMessage = (contractsCount) => `Building ${green(String(contractsCount))} contract declaration(s)...`;
-var buildSpinnerCompletedMessage = (contractsCount) => `Built ${green(String(contractsCount))} contract declaration(s).`;
+var buildSpinnerCompletedMessage = (contracts) => {
+  const names = contracts.join(", ");
+  return `Built ${green(String(contracts.length))} contract declaration(s): ${green(names)}.`;
+};
 var buildSpinnerFailedMessage = () => "Build failed.";
 var fatalErrorWhileBundlingMessage = (error) => log3.error(`Build failed: ${error}`);
 
@@ -314,7 +317,7 @@ async function bundleAllContractDeclarations(config) {
         process.exit(1);
       }
     }
-    buildSpinner.stop(buildSpinnerCompletedMessage(config.contracts.length));
+    buildSpinner.stop(buildSpinnerCompletedMessage(config.contracts));
   } catch (error) {
     buildSpinner.stop(buildSpinnerFailedMessage());
     const errorMessage = error instanceof Error ? error.message : String(error);
