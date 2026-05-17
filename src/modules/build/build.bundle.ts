@@ -24,5 +24,8 @@ export async function bundleContractRuntime(app: string, contract: string): Prom
     'esm',
     '--target',
     'bun',
+    'bun',
+    '--packages',
+    'external',
   ]);
 }
