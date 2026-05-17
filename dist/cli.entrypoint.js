@@ -313,16 +313,12 @@ async function bundleContractRuntime(app, contract) {
     "esbuild",
     paths.input,
     "--bundle",
-    "--format",
-    "esm",
-    "--platform",
-    "node",
-    "--target",
-    "es2022",
+    "--format=esm",
+    "--platform=node",
+    "--target=es2022",
     "--tree-shaking=true",
     "--minify-syntax",
-    "--outfile",
-    paths.runtimeOutput
+    `--outfile=${paths.runtimeOutput}`
   ]);
 }
 
