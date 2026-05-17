@@ -64,6 +64,7 @@ import { z } from "zod";
 var ConfigSchema = z.object({
   app: z.string().regex(/^[a-zA-Z_-]+$/).default("placeholder").meta({ description: "The name of the application, used in filenames and identifiers." }),
   contracts: z.array(z.string().regex(/^[a-zA-Z_-]+$/)).default([]).meta({ description: "Array of selected contract names." }),
+  emit: z.array(z.string().regex(/^[a-zA-Z_-]+$/)).default([]).meta({ description: "Subset of contracts that should also emit runtime JavaScript artifacts." }),
   package: z.object({
     name: z.string().meta({ description: "NPM package name, e.g. @scope/package-name" }),
     version: z.string().regex(/^\d+\.\d+\.\d+/).meta({ description: "Semantic version, e.g. 1.0.0" }),
@@ -72,6 +73,17 @@ var ConfigSchema = z.object({
   npm: z.object({
     token: z.string().meta({ description: "NPM authentication token used for publishing." })
   }).optional().meta({ description: "Optional npm publishing configuration." })
+}).superRefine((config, context) => {
+  const contractNames = new Set(config.contracts);
+  for (const contract of config.emit) {
+    if (!contractNames.has(contract)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["emit"],
+        message: `Emitted contract "${contract}" must be listed in contracts.`
+      });
+    }
+  }
 });
 var EnvironmentStatusSchema = z.object({
   contractDirectoryExists: z.boolean().default(false).meta({ description: "Indicates if the main contract directory exists." }),
@@ -148,6 +160,7 @@ var renderConfigTemplate = (defaultConfig) => {
 const contractConfig: Config = {
   app: '${defaultConfig.app}',
   contracts: ${JSON.stringify(defaultConfig.contracts)},
+  emit: ${JSON.stringify(defaultConfig.emit ?? [])},
   package: {
     name: '${defaultConfig.package.name}',
     version: '${defaultConfig.package.version}',
@@ -285,13 +298,18 @@ import path4 from "path";
 function resolveContractBundlePaths(app, contract) {
   const input = path4.join(CONTRACT_DIRECTORY_NAME, "manifests", `contract.${contract}.manifest.ts`);
   const output = path4.join(CONTRACT_DIRECTORY_NAME, "generated", `${app}.contract.${contract}.d.ts`);
-  return { input, output };
+  const runtimeOutput = path4.join(CONTRACT_DIRECTORY_NAME, "generated", `${app}.contract.${contract}.js`);
+  return { input, output, runtimeOutput };
 }
 
 // src/modules/build/build.bundle.ts
 async function bundleContractDeclaration(app, contract) {
   const paths = resolveContractBundlePaths(app, contract);
   return executeCommand("npx", ["dts-bundle-generator", "-o", paths.output, paths.input, "--no-check"]);
+}
+async function bundleContractRuntime(app, contract) {
+  const paths = resolveContractBundlePaths(app, contract);
+  return executeCommand("bun", ["build", paths.input, "--outfile", paths.runtimeOutput, "--format", "esm"]);
 }
 
 // src/modules/build/build.messages.ts
@@ -306,8 +324,12 @@ var buildSpinnerFailedMessage = () => "Build failed.";
 var fatalErrorWhileBundlingMessage = (error) => log3.error(`Build failed: ${error}`);
 
 // src/modules/build/build.services.ts
+function getEmittedContracts(config) {
+  return Array.isArray(config.emit) ? config.emit : [];
+}
 async function bundleAllContractDeclarations(config) {
   const buildSpinner = spinner();
+  const emittedContracts = getEmittedContracts(config);
   try {
     buildSpinner.start(buildSpinnerStartedMessage(config.contracts.length));
     for (const contract of config.contracts) {
@@ -315,6 +337,13 @@ async function bundleAllContractDeclarations(config) {
       if (!executed) {
         buildSpinner.stop(buildSpinnerFailedMessage());
         process.exit(1);
+      }
+      if (emittedContracts.includes(contract)) {
+        const emitted = await bundleContractRuntime(config.app, contract);
+        if (!emitted) {
+          buildSpinner.stop(buildSpinnerFailedMessage());
+          process.exit(1);
+        }
       }
     }
     buildSpinner.stop(buildSpinnerCompletedMessage(config.contracts));
@@ -596,10 +625,16 @@ function generatePackageJson(config, contracts) {
 function generateIndexDts(contracts) {
   return contracts.map((contract) => `export type * from './${contract}';`).join("\n");
 }
+function generateIndexJs(emittedContracts) {
+  if (emittedContracts.length === 0) {
+    return generateStubJs();
+  }
+  return emittedContracts.map((contract) => `export * from './${contract}.js';`).join("\n");
+}
 function generateStubJs() {
   return "export {};";
 }
-async function collectExistingGeneratedContracts(config, onMissing) {
+async function collectExistingGeneratedContracts(config, onMissing, onMissingEmitted) {
   const generatedDir = getGeneratedDirPath();
   const existing = [];
   for (const contract of config.contracts) {
@@ -611,13 +646,19 @@ async function collectExistingGeneratedContracts(config, onMissing) {
       } else {
         onMissing(contract);
       }
+      if (config.emit.includes(contract)) {
+        const runtimeFilePath = path9.join(generatedDir, `${config.app}.contract.${contract}.js`);
+        if (!await fs7.pathExists(runtimeFilePath)) {
+          onMissingEmitted(contract);
+        }
+      }
     } catch {
       onMissing(contract);
     }
   }
   return existing;
 }
-async function writePreparedArtifacts(config, packageDir, contracts) {
+async function writePreparedArtifacts(config, packageDir, contracts, emittedContracts) {
   const generatedDir = getGeneratedDirPath();
   await fs7.remove(packageDir);
   await fs7.ensureDir(packageDir);
@@ -629,9 +670,16 @@ async function writePreparedArtifacts(config, packageDir, contracts) {
   }
   await fs7.writeFile(path9.join(packageDir, "index.d.ts"), generateIndexDts(contracts));
   const jsStub = generateStubJs();
-  await fs7.writeFile(path9.join(packageDir, "index.js"), jsStub);
+  await fs7.writeFile(path9.join(packageDir, "index.js"), generateIndexJs(emittedContracts));
   for (const contract of contracts) {
-    await fs7.writeFile(path9.join(packageDir, `${contract}.js`), jsStub);
+    if (emittedContracts.includes(contract)) {
+      const sourceFile = path9.join(generatedDir, `${config.app}.contract.${contract}.js`);
+      const destFile = path9.join(packageDir, `${contract}.js`);
+      const content = await fs7.readFile(sourceFile, "utf-8");
+      await fs7.writeFile(destFile, content);
+    } else {
+      await fs7.writeFile(path9.join(packageDir, `${contract}.js`), jsStub);
+    }
   }
   const packageJson = generatePackageJson(config, contracts);
   const packageJsonPath = path9.join(packageDir, "package.json");
@@ -650,6 +698,7 @@ import { green as green4 } from "kleur/colors";
 var packagePreparationStartedMessage = (app) => log6.info(`Preparing ${green4(app)} package...`);
 var packagePreparationCompletedMessage = () => log6.success("Package ready.");
 var missingGeneratedContractsMessage = (contractName) => log6.warn(`Missing generated contract ${green4(contractName)}. Run ${green4("contract build")}.`);
+var missingEmittedContractsMessage = (contractName) => log6.warn(`Missing emitted runtime for ${green4(contractName)}. Run ${green4("contract build")}.`);
 var versionBumpedMessage = (oldVersion, newVersion, reason) => log6.success(`Version bumped from ${green4(oldVersion)} to ${green4(newVersion)} (${reason}).`);
 var versionForcedMessage = (newVersion, bumpType) => log6.success(`Version forced to ${green4(newVersion)} via --bump ${bumpType}.`);
 var versionNoChangeMessage = (version) => log6.info(`No changes. Version ${green4(version)}.`);
@@ -681,16 +730,20 @@ async function applyPrepareVersioning(context) {
 }
 
 // src/modules/prepare/prepare.services.ts
+function getEmittedContracts2(config) {
+  return Array.isArray(config.emit) ? config.emit : [];
+}
 async function prepareContractPackage(config, options = {}) {
   try {
+    const emittedContracts = getEmittedContracts2(config);
     packagePreparationStartedMessage(config.app);
-    const existingContracts = await collectExistingGeneratedContracts(config, missingGeneratedContractsMessage);
+    const existingContracts = await collectExistingGeneratedContracts(config, missingGeneratedContractsMessage, missingEmittedContractsMessage);
     if (existingContracts.length === 0) {
       throw new Error('No generated contracts found. Run "contract build" first.');
     }
     const packageDir = path10.join(process.cwd(), CONTRACT_DIRECTORY_NAME, "package");
     const previousState = await getContractState(packageDir);
-    const { packageJsonPath, baseVersion } = await writePreparedArtifacts(config, packageDir, existingContracts);
+    const { packageJsonPath, baseVersion } = await writePreparedArtifacts(config, packageDir, existingContracts, emittedContracts);
     await applyPrepareVersioning({
       config,
       packageDir,
