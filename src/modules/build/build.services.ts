@@ -2,7 +2,7 @@ import { spinner } from '@clack/prompts';
 
 import type { Config } from '@/environment/environment.schemas';
 
-import { bundleContractDeclaration } from './build.bundle';
+import { bundleContractDeclaration, bundleContractRuntime } from './build.bundle';
 import {
   buildSpinnerCompletedMessage,
   buildSpinnerFailedMessage,
@@ -10,9 +10,15 @@ import {
   fatalErrorWhileBundlingMessage,
 } from './build.messages';
 
+/** Returns a safe list of emitted contracts from config. */
+function getEmittedContracts(config: Config): string[] {
+  return Array.isArray(config.emit) ? config.emit : [];
+}
+
 /** Bundles declaration files for every contract configured in the project. */
 export async function bundleAllContractDeclarations(config: Config): Promise<void> {
   const buildSpinner = spinner();
+  const emittedContracts = getEmittedContracts(config);
 
   try {
     // 1) Show compact build progress for the whole command.
@@ -24,6 +30,14 @@ export async function bundleAllContractDeclarations(config: Config): Promise<voi
       if (!executed) {
         buildSpinner.stop(buildSpinnerFailedMessage());
         process.exit(1);
+      }
+
+      if (emittedContracts.includes(contract)) {
+        const emitted = await bundleContractRuntime(config.app, contract);
+        if (!emitted) {
+          buildSpinner.stop(buildSpinnerFailedMessage());
+          process.exit(1);
+        }
       }
     }
 

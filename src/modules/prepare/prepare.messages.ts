@@ -8,6 +8,9 @@ export const packagePreparationCompletedMessage = (): void => log.success('Packa
 /** Warns that a contract declaration is missing in generated artifacts. */
 export const missingGeneratedContractsMessage = (contractName: string): void =>
   log.warn(`Missing generated contract ${green(contractName)}. Run ${green('contract build')}.`);
+/** Warns that an emitted runtime file is missing in generated artifacts. */
+export const missingEmittedContractsMessage = (contractName: string): void =>
+  log.warn(`Missing emitted runtime for ${green(contractName)}. Run ${green('contract build')}.`);
 /** Logs automatic version bump details and reason. */
 export const versionBumpedMessage = (oldVersion: string, newVersion: string, reason: string): void =>
   log.success(`Version bumped from ${green(oldVersion)} to ${green(newVersion)} (${reason}).`);

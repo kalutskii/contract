@@ -47,6 +47,15 @@ function generateIndexDts(contracts: string[]): string {
   return contracts.map((contract) => `export type * from './${contract}';`).join('\n');
 }
 
+/** Generates index runtime module that re-exports emitted contract values. */
+function generateIndexJs(emittedContracts: string[]): string {
+  if (emittedContracts.length === 0) {
+    return generateStubJs();
+  }
+
+  return emittedContracts.map((contract) => `export * from './${contract}.js';`).join('\n');
+}
+
 /** Minimal runtime stub for package JS files. */
 function generateStubJs(): string {
   return 'export {};';
@@ -55,7 +64,8 @@ function generateStubJs(): string {
 /** Returns configured contracts that already have generated .d.ts files. */
 export async function collectExistingGeneratedContracts(
   config: Config,
-  onMissing: (contractName: string) => void
+  onMissing: (contractName: string) => void,
+  onMissingEmitted: (contractName: string) => void
 ): Promise<string[]> {
   // 1) Scan generated folder and keep only contracts that have compiled declarations.
   // 2) Report missing contracts via callback so caller can show warnings.
@@ -72,6 +82,13 @@ export async function collectExistingGeneratedContracts(
       } else {
         onMissing(contract);
       }
+
+      if (config.emit.includes(contract)) {
+        const runtimeFilePath = path.join(generatedDir, `${config.app}.contract.${contract}.js`);
+        if (!(await fs.pathExists(runtimeFilePath))) {
+          onMissingEmitted(contract);
+        }
+      }
     } catch {
       onMissing(contract);
     }
@@ -84,7 +101,8 @@ export async function collectExistingGeneratedContracts(
 export async function writePreparedArtifacts(
   config: Config,
   packageDir: string,
-  contracts: string[]
+  contracts: string[],
+  emittedContracts: string[]
 ): Promise<{ packageJsonPath: string; baseVersion: string }> {
   // 1) Start from a clean output directory.
   const generatedDir = getGeneratedDirPath();
@@ -103,11 +121,18 @@ export async function writePreparedArtifacts(
   // 3) Write aggregate type entrypoint.
   await fs.writeFile(path.join(packageDir, 'index.d.ts'), generateIndexDts(contracts));
 
-  // 4) Write runtime stubs required by package exports map.
+  // 4) Write runtime entrypoint and contract JS files required by package exports map.
   const jsStub = generateStubJs();
-  await fs.writeFile(path.join(packageDir, 'index.js'), jsStub);
+  await fs.writeFile(path.join(packageDir, 'index.js'), generateIndexJs(emittedContracts));
   for (const contract of contracts) {
-    await fs.writeFile(path.join(packageDir, `${contract}.js`), jsStub);
+    if (emittedContracts.includes(contract)) {
+      const sourceFile = path.join(generatedDir, `${config.app}.contract.${contract}.js`);
+      const destFile = path.join(packageDir, `${contract}.js`);
+      const content = await fs.readFile(sourceFile, 'utf-8');
+      await fs.writeFile(destFile, content);
+    } else {
+      await fs.writeFile(path.join(packageDir, `${contract}.js`), jsStub);
+    }
   }
 
   // 5) Generate package metadata and return key values for next steps.

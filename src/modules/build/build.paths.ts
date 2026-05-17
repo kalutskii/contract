@@ -6,12 +6,14 @@ import { CONTRACT_DIRECTORY_NAME } from '@/environment/environment.constants';
 export interface ContractBundlePaths {
   input: string;
   output: string;
+  runtimeOutput: string;
 }
 
 /** Resolves manifest input and generated output paths for a contract bundle. */
 export function resolveContractBundlePaths(app: string, contract: string): ContractBundlePaths {
   const input = path.join(CONTRACT_DIRECTORY_NAME, 'manifests', `contract.${contract}.manifest.ts`);
   const output = path.join(CONTRACT_DIRECTORY_NAME, 'generated', `${app}.contract.${contract}.d.ts`);
+  const runtimeOutput = path.join(CONTRACT_DIRECTORY_NAME, 'generated', `${app}.contract.${contract}.js`);
 
-  return { input, output };
+  return { input, output, runtimeOutput };
 }

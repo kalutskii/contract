@@ -7,6 +7,7 @@ import { getContractState } from '@/modules/versioning/versioning.services';
 import { collectExistingGeneratedContracts, writePreparedArtifacts } from './prepare.artifacts';
 import {
   fatalErrorWhilePreparingPackageMessage,
+  missingEmittedContractsMessage,
   missingGeneratedContractsMessage,
   packagePreparationCompletedMessage,
   packagePreparationStartedMessage,
@@ -14,12 +15,23 @@ import {
 import type { PrepareOptions } from './prepare.types';
 import { applyPrepareVersioning } from './prepare.versioning';
 
+/** Returns a safe list of emitted contracts from config. */
+function getEmittedContracts(config: Config): string[] {
+  return Array.isArray(config.emit) ? config.emit : [];
+}
+
 /** Builds the publishable package directory from generated contract declarations. */
 export async function prepareContractPackage(config: Config, options: PrepareOptions = {}): Promise<void> {
   try {
+    const emittedContracts = getEmittedContracts(config);
+
     // Step 1: Start flow and resolve contracts that have generated declarations.
     packagePreparationStartedMessage(config.app);
-    const existingContracts = await collectExistingGeneratedContracts(config, missingGeneratedContractsMessage);
+    const existingContracts = await collectExistingGeneratedContracts(
+      config,
+      missingGeneratedContractsMessage,
+      missingEmittedContractsMessage
+    );
 
     if (existingContracts.length === 0) {
       throw new Error('No generated contracts found. Run "contract build" first.');
@@ -30,7 +42,12 @@ export async function prepareContractPackage(config: Config, options: PrepareOpt
     const previousState = await getContractState(packageDir);
 
     // Step 3: Recreate package artifacts (d.ts, js stubs, package.json).
-    const { packageJsonPath, baseVersion } = await writePreparedArtifacts(config, packageDir, existingContracts);
+    const { packageJsonPath, baseVersion } = await writePreparedArtifacts(
+      config,
+      packageDir,
+      existingContracts,
+      emittedContracts
+    );
 
     // Step 4: Apply manual/automatic versioning and persist hash state.
     await applyPrepareVersioning({

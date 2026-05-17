@@ -17,6 +17,7 @@ export const renderConfigTemplate = (defaultConfig: Config): string => {
 const contractConfig: Config = {
   app: '${defaultConfig.app}',
   contracts: ${JSON.stringify(defaultConfig.contracts)},
+  emit: ${JSON.stringify(defaultConfig.emit ?? [])},
   package: {
     name: '${defaultConfig.package.name}',
     version: '${defaultConfig.package.version}',

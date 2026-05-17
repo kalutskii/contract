@@ -52,6 +52,7 @@ bunx contract build
 ```
 
 This bundles each manifest into a standalone `.d.ts` file using `dts-bundle-generator`.
+If a contract name is listed in `emit` inside `contract.config.ts`, the build also emits a runtime `.js` file for that manifest.
 
 ### Prepare Package
 
@@ -65,9 +66,9 @@ This creates a publishable package in `contract/package/`:
 contract/package/
   ├── package.json          # Package metadata
   ├── index.d.ts            # Exports all contracts
-  ├── index.js              # Stub
+  ├── index.js              # Runtime entrypoint for emitted contracts
   ├── api.d.ts              # Contract: api
-  ├── api.js                # Stub
+  ├── api.js                # Runtime contract module when emitted
   ├── types.d.ts            # Contract: types
   └── types.js              # Stub
 ```
@@ -138,6 +139,7 @@ import type { Config } from 'contract';
 const contractConfig: Config = {
   app: 'admin-service',
   contracts: ['api', 'types', 'events'],
+  emit: ['events'],
   package: {
     name: '@company-contracts/admin-service',
     version: '1.0.0',
@@ -154,6 +156,7 @@ export default contractConfig;
 
 - `app` - Service/app name (used in generated filenames)
 - `contracts` - List of contract names to generate
+- `emit` - Subset of contracts that should also publish runtime JavaScript
 - `package.name` - NPM package name
 - `package.version` - Semantic version
 - `package.exports` - (Optional) Custom export field configuration
@@ -179,11 +182,14 @@ contract/
   │   └── contract.types.manifest.ts
   ├── generated/        # Built .d.ts files (output)
   │   ├── app.contract.api.d.ts
+  │   ├── app.contract.events.js
   │   └── app.contract.types.d.ts
   └── package/          # Publishable npm package (output)
       ├── package.json
       ├── index.d.ts
+      ├── index.js
       ├── api.d.ts
+      ├── events.js
       └── types.d.ts
 ```
 
@@ -251,7 +257,7 @@ The project uses:
 
 - This library is **local-only** — it does not perform remote synchronization or automatic publishing
 - Publishing uses a temporary `.npmrc` in `contract/package` from `config.npm.token`, `NPM_TOKEN`, or `NODE_AUTH_TOKEN` and removes it after publish attempt
-- Contract manifests should contain only type definitions, not runtime code
+- Contract manifests can export runtime values for contracts listed in `emit`
 - Use `contract update:environment` to regenerate missing files (e.g., after adding new contracts)
 - Versions are automatically managed based on content changes and npm registry state
 - Content hash is stored in `contract/.contract-package-state.json` for change detection
