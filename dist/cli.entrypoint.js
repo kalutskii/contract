@@ -634,8 +634,10 @@ function generatePackageJson(config, contracts) {
     types: "./index.d.ts"
   };
 }
-function generateIndexDts(contracts) {
-  return contracts.map((contract) => `export type * from './${contract}';`).join("\n");
+function generateIndexDts(contracts, emittedContracts) {
+  const typeExports = contracts.map((contract) => `export type * from './${contract}';`).join("\n");
+  const runtimeExports = emittedContracts.map((contract) => `export * from './${contract}';`).join("\n");
+  return [typeExports, runtimeExports].filter(Boolean).join("\n");
 }
 function generateIndexJs(emittedContracts) {
   if (emittedContracts.length === 0) {
@@ -680,7 +682,7 @@ async function writePreparedArtifacts(config, packageDir, contracts, emittedCont
     const content = await fs7.readFile(sourceFile, "utf-8");
     await fs7.writeFile(destFile, content);
   }
-  await fs7.writeFile(path9.join(packageDir, "index.d.ts"), generateIndexDts(contracts));
+  await fs7.writeFile(path9.join(packageDir, "index.d.ts"), generateIndexDts(contracts, emittedContracts));
   const jsStub = generateStubJs();
   await fs7.writeFile(path9.join(packageDir, "index.js"), generateIndexJs(emittedContracts));
   for (const contract of contracts) {

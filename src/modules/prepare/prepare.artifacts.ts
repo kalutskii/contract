@@ -42,9 +42,11 @@ function generatePackageJson(config: Config, contracts: string[]): Record<string
   };
 }
 
-/** Generates index declaration that re-exports contract types. */
-function generateIndexDts(contracts: string[]): string {
-  return contracts.map((contract) => `export type * from './${contract}';`).join('\n');
+/** Generates index declaration that re-exports contract types and emitted runtime values. */
+function generateIndexDts(contracts: string[], emittedContracts: string[]): string {
+  const typeExports = contracts.map((contract) => `export type * from './${contract}';`).join('\n');
+  const runtimeExports = emittedContracts.map((contract) => `export * from './${contract}';`).join('\n');
+  return [typeExports, runtimeExports].filter(Boolean).join('\n');
 }
 
 /** Generates index runtime module that re-exports emitted contract values. */
@@ -119,7 +121,7 @@ export async function writePreparedArtifacts(
   }
 
   // 3) Write aggregate type entrypoint.
-  await fs.writeFile(path.join(packageDir, 'index.d.ts'), generateIndexDts(contracts));
+  await fs.writeFile(path.join(packageDir, 'index.d.ts'), generateIndexDts(contracts, emittedContracts));
 
   // 4) Write runtime entrypoint and contract JS files required by package exports map.
   const jsStub = generateStubJs();
