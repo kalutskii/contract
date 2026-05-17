@@ -309,15 +309,20 @@ async function bundleContractDeclaration(app, contract) {
 }
 async function bundleContractRuntime(app, contract) {
   const paths = resolveContractBundlePaths(app, contract);
-  return executeCommand("bun", [
-    "build",
+  return executeCommand("npx", [
+    "esbuild",
     paths.input,
-    "--outfile",
-    paths.runtimeOutput,
+    "--bundle",
     "--format",
     "esm",
+    "--platform",
+    "node",
     "--target",
-    "bun"
+    "es2022",
+    "--tree-shaking=true",
+    "--minify-syntax",
+    "--outfile",
+    paths.runtimeOutput
   ]);
 }
 
