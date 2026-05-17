@@ -45,6 +45,14 @@ export interface UserCreateResponse {
 }
 ```
 
+For emitted runtime values, prefer this shape:
+
+```typescript
+export { PBACPermissionsRecord } from '@/app/domain/permissions/permissions.constants';
+```
+
+Keep `permissions.constants.ts` as a leaf runtime file with no unrelated runtime imports.
+
 ### Build Declarations
 
 ```bash
@@ -53,6 +61,12 @@ bunx contract build
 
 This bundles each manifest into a standalone `.d.ts` file using `dts-bundle-generator`.
 If a contract name is listed in `emit` inside `contract.config.ts`, the build also emits a runtime `.js` file for that manifest.
+
+For `emit` contracts, keep runtime exports narrow:
+
+- re-export directly from the concrete file that owns the value
+- avoid barrel files for runtime exports
+- keep that source file free of unrelated runtime imports when possible
 
 ### Prepare Package
 
@@ -258,6 +272,7 @@ The project uses:
 - This library is **local-only** — it does not perform remote synchronization or automatic publishing
 - Publishing uses a temporary `.npmrc` in `contract/package` from `config.npm.token`, `NPM_TOKEN`, or `NODE_AUTH_TOKEN` and removes it after publish attempt
 - Contract manifests can export runtime values for contracts listed in `emit`
+- For `emit`, import or re-export from direct leaf files instead of barrels or service modules with broader dependency graphs
 - Use `contract update:environment` to regenerate missing files (e.g., after adding new contracts)
 - Versions are automatically managed based on content changes and npm registry state
 - Content hash is stored in `contract/.contract-package-state.json` for change detection

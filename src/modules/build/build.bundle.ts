@@ -15,15 +15,14 @@ export async function bundleContractDeclaration(app: string, contract: string): 
 export async function bundleContractRuntime(app: string, contract: string): Promise<boolean> {
   const paths = resolveContractBundlePaths(app, contract);
 
-  return executeCommand('npx', [
-    'esbuild',
+  return executeCommand('bun', [
+    'build',
     paths.input,
-    '--bundle',
-    '--format=esm',
-    '--platform=node',
-    '--target=es2022',
-    '--tree-shaking=true',
-    '--minify-syntax',
-    `--outfile=${paths.runtimeOutput}`,
+    '--outfile',
+    paths.runtimeOutput,
+    '--format',
+    'esm',
+    '--target',
+    'bun',
   ]);
 }

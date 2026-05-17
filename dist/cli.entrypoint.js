@@ -172,6 +172,8 @@ export default contractConfig;
 };
 var renderManifestTemplate = (contractName) => `// Define and export all types related to this contract (${contractName}).
 // This file will be bundled into ${contractName}.d.ts during "contract build".
+// If this contract is listed in config.emit, re-export runtime values only from direct leaf files.
+// Keep emitted source files free of unrelated runtime imports, or they will be pulled into the bundle.
 
 `;
 
@@ -309,16 +311,15 @@ async function bundleContractDeclaration(app, contract) {
 }
 async function bundleContractRuntime(app, contract) {
   const paths = resolveContractBundlePaths(app, contract);
-  return executeCommand("npx", [
-    "esbuild",
+  return executeCommand("bun", [
+    "build",
     paths.input,
-    "--bundle",
-    "--format=esm",
-    "--platform=node",
-    "--target=es2022",
-    "--tree-shaking=true",
-    "--minify-syntax",
-    `--outfile=${paths.runtimeOutput}`
+    "--outfile",
+    paths.runtimeOutput,
+    "--format",
+    "esm",
+    "--target",
+    "bun"
   ]);
 }
 
