@@ -309,7 +309,16 @@ async function bundleContractDeclaration(app, contract) {
 }
 async function bundleContractRuntime(app, contract) {
   const paths = resolveContractBundlePaths(app, contract);
-  return executeCommand("bun", ["build", paths.input, "--outfile", paths.runtimeOutput, "--format", "esm"]);
+  return executeCommand("bun", [
+    "build",
+    paths.input,
+    "--outfile",
+    paths.runtimeOutput,
+    "--format",
+    "esm",
+    "--target",
+    "bun"
+  ]);
 }
 
 // src/modules/build/build.messages.ts

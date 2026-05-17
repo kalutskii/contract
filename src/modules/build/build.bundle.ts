@@ -15,5 +15,14 @@ export async function bundleContractDeclaration(app: string, contract: string): 
 export async function bundleContractRuntime(app: string, contract: string): Promise<boolean> {
   const paths = resolveContractBundlePaths(app, contract);
 
-  return executeCommand('bun', ['build', paths.input, '--outfile', paths.runtimeOutput, '--format', 'esm']);
+  return executeCommand('bun', [
+    'build',
+    paths.input,
+    '--outfile',
+    paths.runtimeOutput,
+    '--format',
+    'esm',
+    '--target',
+    'bun',
+  ]);
 }
