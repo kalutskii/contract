@@ -250,6 +250,11 @@ async function updateConfigVersion(newVersion) {
 // src/modules/build/build.services.ts
 import { spinner } from "@clack/prompts";
 
+// src/modules/build/build.bundle.ts
+import { build } from "esbuild";
+import { tsconfigPathsPlugin } from "esbuild-plugin-tsconfig-paths";
+import path6 from "path";
+
 // src/utilities/execution.utilities.ts
 import { log as log2 } from "@clack/prompts";
 import { execa } from "execa";
@@ -296,36 +301,6 @@ ${errorMessage}`);
   return true;
 }
 
-// src/modules/build/build.paths.ts
-import path4 from "path";
-function resolveContractBundlePaths(app, contract) {
-  const input = path4.join(CONTRACT_DIRECTORY_NAME, "manifests", `contract.${contract}.manifest.ts`);
-  const output = path4.join(CONTRACT_DIRECTORY_NAME, "generated", `${app}.contract.${contract}.d.ts`);
-  const runtimeOutput = path4.join(CONTRACT_DIRECTORY_NAME, "generated", `${app}.contract.${contract}.js`);
-  return { input, output, runtimeOutput };
-}
-
-// src/modules/build/build.bundle.ts
-async function bundleContractDeclaration(app, contract) {
-  const paths = resolveContractBundlePaths(app, contract);
-  return executeCommand("npx", ["dts-bundle-generator", "-o", paths.output, paths.input, "--no-check"]);
-}
-async function bundleContractRuntime(app, contract) {
-  const paths = resolveContractBundlePaths(app, contract);
-  return executeCommand("bun", [
-    "build",
-    paths.input,
-    "--outfile",
-    paths.runtimeOutput,
-    "--format",
-    "esm",
-    "--packages",
-    "external",
-    "--target",
-    "bun"
-  ]);
-}
-
 // src/modules/build/build.messages.ts
 import { log as log3 } from "@clack/prompts";
 import { green } from "kleur/colors";
@@ -336,6 +311,65 @@ var buildSpinnerCompletedMessage = (contracts) => {
 };
 var buildSpinnerFailedMessage = () => "Build failed.";
 var fatalErrorWhileBundlingMessage = (error) => log3.error(`Build failed: ${error}`);
+
+// src/modules/build/build.paths.ts
+import path4 from "path";
+function resolveContractBundlePaths(app, contract) {
+  const input = path4.join(CONTRACT_DIRECTORY_NAME, "manifests", `contract.${contract}.manifest.ts`);
+  const output = path4.join(CONTRACT_DIRECTORY_NAME, "generated", `${app}.contract.${contract}.d.ts`);
+  const runtimeOutput = path4.join(CONTRACT_DIRECTORY_NAME, "generated", `${app}.contract.${contract}.js`);
+  return { input, output, runtimeOutput };
+}
+
+// src/modules/build/build.utilities.ts
+import fs4 from "fs/promises";
+import path5 from "path";
+async function getRuntimeExternalPackages() {
+  const packageJSONPath = path5.join(process.cwd(), "package.json");
+  try {
+    const rawPackageJSON = await fs4.readFile(packageJSONPath, "utf-8");
+    const packageJSON = JSON.parse(rawPackageJSON);
+    const packageNames = /* @__PURE__ */ new Set([
+      ...Object.keys(packageJSON.dependencies ?? {}),
+      ...Object.keys(packageJSON.devDependencies ?? {}),
+      ...Object.keys(packageJSON.peerDependencies ?? {}),
+      ...Object.keys(packageJSON.optionalDependencies ?? {})
+    ]);
+    return [...packageNames].flatMap((packageName) => [packageName, `${packageName}/*`]);
+  } catch {
+    return [];
+  }
+}
+
+// src/modules/build/build.bundle.ts
+async function bundleContractDeclaration(app, contract) {
+  const paths = resolveContractBundlePaths(app, contract);
+  return executeCommand("npx", ["dts-bundle-generator", "-o", paths.output, paths.input, "--no-check"]);
+}
+async function bundleContractRuntime(app, contract) {
+  const paths = resolveContractBundlePaths(app, contract);
+  const externalPackages = await getRuntimeExternalPackages();
+  try {
+    await build({
+      bundle: true,
+      entryPoints: [paths.input],
+      external: externalPackages,
+      format: "esm",
+      logLevel: "silent",
+      outfile: paths.runtimeOutput,
+      platform: "neutral",
+      plugins: [tsconfigPathsPlugin()],
+      target: "esnext",
+      treeShaking: true,
+      tsconfig: path6.join(process.cwd(), "tsconfig.json")
+    });
+    return true;
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    fatalErrorWhileBundlingMessage(errorMessage);
+    return false;
+  }
+}
 
 // src/modules/build/build.services.ts
 function getEmittedContracts(config) {
@@ -426,7 +460,7 @@ import { Command as Command3 } from "clipanion";
 
 // src/modules/pack/pack.services.ts
 import { spinner as spinner2 } from "@clack/prompts";
-import path6 from "path";
+import path8 from "path";
 
 // src/modules/pack/pack.messages.ts
 import { log as log5 } from "@clack/prompts";
@@ -440,23 +474,23 @@ var packageJsonNotFoundMessage = () => log5.error(`package.json missing. Run ${g
 var fatalErrorWhilePackingMessage = (error) => log5.error(`Pack failed: ${error}`);
 
 // src/modules/pack/pack.validation.ts
-import fs4 from "fs-extra";
-import path5 from "path";
+import fs5 from "fs-extra";
+import path7 from "path";
 function resolvePackPaths() {
-  const packageDir = path5.join(process.cwd(), CONTRACT_DIRECTORY_NAME, "package");
-  const packageJsonPath = path5.join(packageDir, "package.json");
+  const packageDir = path7.join(process.cwd(), CONTRACT_DIRECTORY_NAME, "package");
+  const packageJsonPath = path7.join(packageDir, "package.json");
   return { packageDir, packageJsonPath };
 }
 async function ensurePackPathsExist(paths) {
-  if (!await fs4.pathExists(paths.packageDir)) {
+  if (!await fs5.pathExists(paths.packageDir)) {
     throw new Error("PACKAGE_DIR_NOT_FOUND");
   }
-  if (!await fs4.pathExists(paths.packageJsonPath)) {
+  if (!await fs5.pathExists(paths.packageJsonPath)) {
     throw new Error("PACKAGE_JSON_NOT_FOUND");
   }
 }
 async function findPackedArchive(packageDir) {
-  const files = await fs4.readdir(packageDir);
+  const files = await fs5.readdir(packageDir);
   return files.find((file) => file.endsWith(".tgz")) ?? null;
 }
 
@@ -487,7 +521,7 @@ async function packContractPackage() {
     }
     const tgzFile = await findPackedArchive(paths.packageDir);
     if (tgzFile) {
-      const tgzPath = path6.join(paths.packageDir, tgzFile);
+      const tgzPath = path8.join(paths.packageDir, tgzFile);
       packSpinner.stop(packSpinnerCompletedMessage(tgzFile, tgzPath));
     } else {
       packSpinner.stop(packSpinnerCompletedFallbackMessage());
@@ -514,12 +548,12 @@ var PackPackageCommand = class extends Command3 {
 import { Command as Command4, Option } from "clipanion";
 
 // src/modules/prepare/prepare.services.ts
-import path10 from "path";
+import path12 from "path";
 
 // src/modules/versioning/versioning.hash.ts
 import crypto from "crypto";
-import fs5 from "fs-extra";
-import path7 from "path";
+import fs6 from "fs-extra";
+import path9 from "path";
 
 // src/modules/versioning/versioning.constants.ts
 var PUBLISHABLE_FILES = ["package.json", "index.d.ts", "index.js"];
@@ -533,9 +567,9 @@ async function computePackageHash(packageDir, contracts) {
   const hash = crypto.createHash("sha256");
   const filesToHash = addContractFiles(contracts);
   for (const filename of filesToHash.sort()) {
-    const filePath = path7.join(packageDir, filename);
+    const filePath = path9.join(packageDir, filename);
     try {
-      let content = await fs5.readFile(filePath, "utf-8");
+      let content = await fs6.readFile(filePath, "utf-8");
       if (filename === "package.json") {
         const json = JSON.parse(content);
         delete json.version;
@@ -551,8 +585,8 @@ async function computePackageHash(packageDir, contracts) {
 }
 
 // src/modules/versioning/versioning.state.ts
-import fs6 from "fs-extra";
-import path8 from "path";
+import fs7 from "fs-extra";
+import path10 from "path";
 
 // src/utilities/type.utilities.ts
 function isRecord(value) {
@@ -567,13 +601,13 @@ function toContractState(value) {
   return { hash: value.hash };
 }
 function getStatePath(packageDir) {
-  return path8.join(path8.dirname(packageDir), CONTRACT_PACKAGE_STATE_FILE);
+  return path10.join(path10.dirname(packageDir), CONTRACT_PACKAGE_STATE_FILE);
 }
 async function getContractState(packageDir) {
   const statePath = getStatePath(packageDir);
   try {
-    if (await fs6.pathExists(statePath)) {
-      const rawState = await fs6.readJSON(statePath);
+    if (await fs7.pathExists(statePath)) {
+      const rawState = await fs7.readJSON(statePath);
       return toContractState(rawState);
     }
   } catch {
@@ -583,7 +617,7 @@ async function getContractState(packageDir) {
 }
 async function writeContractState(packageDir, state) {
   const statePath = getStatePath(packageDir);
-  await fs6.writeJSON(statePath, state, { spaces: 2 });
+  await fs7.writeJSON(statePath, state, { spaces: 2 });
 }
 
 // src/modules/versioning/versioning.semver.ts
@@ -605,10 +639,10 @@ function bumpVersion(currentVersion, bumpType) {
 }
 
 // src/modules/prepare/prepare.artifacts.ts
-import fs7 from "fs-extra";
-import path9 from "path";
+import fs8 from "fs-extra";
+import path11 from "path";
 function getGeneratedDirPath() {
-  return path9.join(process.cwd(), CONTRACT_DIRECTORY_NAME, "generated");
+  return path11.join(process.cwd(), CONTRACT_DIRECTORY_NAME, "generated");
 }
 function generatePackageJson(config, contracts) {
   const exports = {
@@ -655,16 +689,16 @@ async function collectExistingGeneratedContracts(config, onMissing, onMissingEmi
   const existing = [];
   for (const contract of config.contracts) {
     const contractFileName = `${config.app}.contract.${contract}.d.ts`;
-    const contractFilePath = path9.join(generatedDir, contractFileName);
+    const contractFilePath = path11.join(generatedDir, contractFileName);
     try {
-      if (await fs7.pathExists(contractFilePath)) {
+      if (await fs8.pathExists(contractFilePath)) {
         existing.push(contract);
       } else {
         onMissing(contract);
       }
       if (config.emit.includes(contract)) {
-        const runtimeFilePath = path9.join(generatedDir, `${config.app}.contract.${contract}.js`);
-        if (!await fs7.pathExists(runtimeFilePath)) {
+        const runtimeFilePath = path11.join(generatedDir, `${config.app}.contract.${contract}.js`);
+        if (!await fs8.pathExists(runtimeFilePath)) {
           onMissingEmitted(contract);
         }
       }
@@ -676,36 +710,36 @@ async function collectExistingGeneratedContracts(config, onMissing, onMissingEmi
 }
 async function writePreparedArtifacts(config, packageDir, contracts, emittedContracts) {
   const generatedDir = getGeneratedDirPath();
-  await fs7.remove(packageDir);
-  await fs7.ensureDir(packageDir);
+  await fs8.remove(packageDir);
+  await fs8.ensureDir(packageDir);
   for (const contract of contracts) {
-    const sourceFile = path9.join(generatedDir, `${config.app}.contract.${contract}.d.ts`);
-    const destFile = path9.join(packageDir, `${contract}.d.ts`);
-    const content = await fs7.readFile(sourceFile, "utf-8");
-    await fs7.writeFile(destFile, content);
+    const sourceFile = path11.join(generatedDir, `${config.app}.contract.${contract}.d.ts`);
+    const destFile = path11.join(packageDir, `${contract}.d.ts`);
+    const content = await fs8.readFile(sourceFile, "utf-8");
+    await fs8.writeFile(destFile, content);
   }
-  await fs7.writeFile(path9.join(packageDir, "index.d.ts"), generateIndexDts(contracts, emittedContracts));
+  await fs8.writeFile(path11.join(packageDir, "index.d.ts"), generateIndexDts(contracts, emittedContracts));
   const jsStub = generateStubJs();
-  await fs7.writeFile(path9.join(packageDir, "index.js"), generateIndexJs(emittedContracts));
+  await fs8.writeFile(path11.join(packageDir, "index.js"), generateIndexJs(emittedContracts));
   for (const contract of contracts) {
     if (emittedContracts.includes(contract)) {
-      const sourceFile = path9.join(generatedDir, `${config.app}.contract.${contract}.js`);
-      const destFile = path9.join(packageDir, `${contract}.js`);
-      const content = await fs7.readFile(sourceFile, "utf-8");
-      await fs7.writeFile(destFile, content);
+      const sourceFile = path11.join(generatedDir, `${config.app}.contract.${contract}.js`);
+      const destFile = path11.join(packageDir, `${contract}.js`);
+      const content = await fs8.readFile(sourceFile, "utf-8");
+      await fs8.writeFile(destFile, content);
     } else {
-      await fs7.writeFile(path9.join(packageDir, `${contract}.js`), jsStub);
+      await fs8.writeFile(path11.join(packageDir, `${contract}.js`), jsStub);
     }
   }
   const packageJson = generatePackageJson(config, contracts);
-  const packageJsonPath = path9.join(packageDir, "package.json");
-  await fs7.writeJSON(packageJsonPath, packageJson, { spaces: 2 });
+  const packageJsonPath = path11.join(packageDir, "package.json");
+  await fs8.writeJSON(packageJsonPath, packageJson, { spaces: 2 });
   return { packageJsonPath, baseVersion: String(packageJson.version) };
 }
 async function updatePackageVersion(packageJsonPath, newVersion) {
-  const packageJson = await fs7.readJSON(packageJsonPath);
+  const packageJson = await fs8.readJSON(packageJsonPath);
   packageJson.version = newVersion;
-  await fs7.writeJSON(packageJsonPath, packageJson, { spaces: 2 });
+  await fs8.writeJSON(packageJsonPath, packageJson, { spaces: 2 });
 }
 
 // src/modules/prepare/prepare.messages.ts
@@ -757,7 +791,7 @@ async function prepareContractPackage(config, options = {}) {
     if (existingContracts.length === 0) {
       throw new Error('No generated contracts found. Run "contract build" first.');
     }
-    const packageDir = path10.join(process.cwd(), CONTRACT_DIRECTORY_NAME, "package");
+    const packageDir = path12.join(process.cwd(), CONTRACT_DIRECTORY_NAME, "package");
     const previousState = await getContractState(packageDir);
     const { packageJsonPath, baseVersion } = await writePreparedArtifacts(config, packageDir, existingContracts, emittedContracts);
     await applyPrepareVersioning({
@@ -803,8 +837,8 @@ import { Command as Command5, Option as Option2 } from "clipanion";
 import { spinner as spinner3 } from "@clack/prompts";
 
 // src/modules/publish/publish.auth.ts
-import fs8 from "fs-extra";
-import path11 from "path";
+import fs9 from "fs-extra";
+import path13 from "path";
 function resolveNpmToken(config) {
   if (config.npm?.token)
     return { source: "config", token: config.npm.token };
@@ -815,13 +849,13 @@ function resolveNpmToken(config) {
   return null;
 }
 async function writeNpmRc(packageDir, token) {
-  const npmrcPath = path11.join(packageDir, ".npmrc");
-  await fs8.writeFile(npmrcPath, `//registry.npmjs.org/:_authToken=${token}
+  const npmrcPath = path13.join(packageDir, ".npmrc");
+  await fs9.writeFile(npmrcPath, `//registry.npmjs.org/:_authToken=${token}
 `);
 }
 async function removeNpmRc(packageDir) {
-  const npmrcPath = path11.join(packageDir, ".npmrc");
-  await fs8.remove(npmrcPath);
+  const npmrcPath = path13.join(packageDir, ".npmrc");
+  await fs9.remove(npmrcPath);
 }
 
 // src/modules/publish/publish.errors.ts
@@ -866,23 +900,23 @@ Run "contract prepare:package --bump patch" to bump the version, then try publis
 }
 
 // src/modules/publish/publish.validation.ts
-import fs9 from "fs-extra";
-import path12 from "path";
+import fs10 from "fs-extra";
+import path14 from "path";
 function resolvePublishPaths() {
-  const packageDir = path12.resolve(CONTRACT_DIRECTORY_NAME, "package");
-  const packageJsonPath = path12.join(packageDir, "package.json");
+  const packageDir = path14.resolve(CONTRACT_DIRECTORY_NAME, "package");
+  const packageJsonPath = path14.join(packageDir, "package.json");
   return { packageDir, packageJsonPath };
 }
 async function ensurePublishPathsExist(paths) {
-  if (!await fs9.pathExists(paths.packageDir)) {
+  if (!await fs10.pathExists(paths.packageDir)) {
     throw new Error("PACKAGE_DIR_NOT_FOUND");
   }
-  if (!await fs9.pathExists(paths.packageJsonPath)) {
+  if (!await fs10.pathExists(paths.packageJsonPath)) {
     throw new Error("PACKAGE_JSON_NOT_FOUND");
   }
 }
 async function readPackageJsonInfo(packageJsonPath) {
-  const packageJson = await fs9.readJSON(packageJsonPath);
+  const packageJson = await fs10.readJSON(packageJsonPath);
   if (!packageJson.name) {
     throw new Error('package.json is missing a valid "name" field.');
   }
@@ -891,7 +925,7 @@ async function readPackageJsonInfo(packageJsonPath) {
 async function syncPackageJsonVersion(packageJsonPath, packageJson, expectedVersion) {
   if (packageJson.version !== expectedVersion) {
     packageJson.version = expectedVersion;
-    await fs9.writeJSON(packageJsonPath, packageJson, { spaces: 2 });
+    await fs10.writeJSON(packageJsonPath, packageJson, { spaces: 2 });
   }
 }
 
