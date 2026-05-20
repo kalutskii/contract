@@ -1,7 +1,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 
-import { getConfig } from '@/environment/environment.services';
+import type { getConfig } from '@/environment/environment.services';
 
 import type { ResolvedNpmToken } from './publish.types';
 

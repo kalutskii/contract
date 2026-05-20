@@ -53,12 +53,14 @@ export async function publishContractPackage(options: { access?: string; prepare
       const code = error instanceof Error ? error.message : String(error);
       if (code === 'PACKAGE_DIR_NOT_FOUND') {
         packageDirectoryNotFoundMessage();
-        process.exit(1);
+        process.exitCode = 1;
+        return;
       }
 
       if (code === 'PACKAGE_JSON_NOT_FOUND') {
         packageJsonNotFoundMessage();
-        process.exit(1);
+        process.exitCode = 1;
+        return;
       }
 
       throw error;
@@ -76,7 +78,8 @@ export async function publishContractPackage(options: { access?: string; prepare
     const npmToken = resolveNpmToken(config);
     if (!npmToken) {
       npmTokenMissingMessage();
-      process.exit(1);
+      process.exitCode = 1;
+      return;
     }
 
     // Step 6: Show compact publish progress and write auth config.
@@ -107,7 +110,7 @@ export async function publishContractPackage(options: { access?: string; prepare
 
     const errorMessage = error instanceof Error ? error.message : String(error);
     fatalErrorWhilePublishingMessage(errorMessage);
-    process.exit(1);
+    process.exitCode = 1;
   } finally {
     if (packageDirForCleanup) {
       await removeNpmRc(packageDirForCleanup);

@@ -949,11 +949,13 @@ async function publishContractPackage(options = {}) {
       const code = error instanceof Error ? error.message : String(error);
       if (code === "PACKAGE_DIR_NOT_FOUND") {
         packageDirectoryNotFoundMessage2();
-        process.exit(1);
+        process.exitCode = 1;
+        return;
       }
       if (code === "PACKAGE_JSON_NOT_FOUND") {
         packageJsonNotFoundMessage2();
-        process.exit(1);
+        process.exitCode = 1;
+        return;
       }
       throw error;
     }
@@ -965,7 +967,8 @@ async function publishContractPackage(options = {}) {
     const npmToken = resolveNpmToken(config);
     if (!npmToken) {
       npmTokenMissingMessage();
-      process.exit(1);
+      process.exitCode = 1;
+      return;
     }
     publishSpinner = spinner3();
     publishSpinner.start(publishSpinnerStartedMessage(packageName, packageVersion));
@@ -985,7 +988,7 @@ async function publishContractPackage(options = {}) {
     }
     const errorMessage = error instanceof Error ? error.message : String(error);
     fatalErrorWhilePublishingMessage(errorMessage);
-    process.exit(1);
+    process.exitCode = 1;
   } finally {
     if (packageDirForCleanup) {
       await removeNpmRc(packageDirForCleanup);
