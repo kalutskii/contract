@@ -34,7 +34,6 @@ export const renderManifestTemplate = (contractName: string): string =>
 // This file will be bundled into ${contractName}.d.ts during "contract build".
 
 // If this contract is listed in config.emit, re-export runtime values only from direct leaf files.
-// Local runtime imports will be bundled into the emitted .js file.
-// External packages stay as imports, so consumers must install them separately.
+// Keep emitted source files free of unrelated local imports, or they will be pulled into the bundle.
 
 `;

@@ -174,7 +174,7 @@ var renderManifestTemplate = (contractName) => `// Define and export all types r
 // This file will be bundled into ${contractName}.d.ts during "contract build".
 
 // If this contract is listed in config.emit, re-export runtime values only from direct leaf files.
-// Keep emitted source files free of unrelated runtime imports, or they will be pulled into the bundle.
+// Keep emitted source files free of unrelated local imports, or they will be pulled into the bundle.
 
 `;
 
@@ -319,6 +319,8 @@ async function bundleContractRuntime(app, contract) {
     paths.runtimeOutput,
     "--format",
     "esm",
+    "--packages",
+    "external",
     "--target",
     "bun"
   ]);
