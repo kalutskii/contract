@@ -22,6 +22,8 @@ export async function bundleContractRuntime(app: string, contract: string): Prom
     paths.runtimeOutput,
     '--format',
     'esm',
+    '--packages',
+    'external',
     '--target',
     'bun',
   ]);
