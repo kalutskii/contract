@@ -1,6 +1,6 @@
 {
   "name": "@kalutskii/contract",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "TypeScript contract library for generating, versioning, and distributing type definitions across services.",
   "type": "module",
   "repository": {
