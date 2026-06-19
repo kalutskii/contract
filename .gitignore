@@ -1,8 +1,11 @@
+# More details about ignoring files: https://help.github.com/articles/ignoring-files/
+
 # dependencies (bun install)
 node_modules
 
 # output
 out
+dist
 *.tgz
 
 # code coverage
@@ -20,6 +23,9 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .env.test.local
 .env.production.local
 .env.local
+
+# config files
+.npmrc
 
 # caches
 .eslintcache

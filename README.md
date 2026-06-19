@@ -1,8 +1,30 @@
 # contract
 
-A TypeScript tool for building contract packages that define shared types and interfaces for distribution via npm or GitHub Packages.
+A TypeScript CLI tool for building contract packages that define shared types and interfaces for distribution via npm.
 
 Instead of syncing contracts over HTTP between services, this library generates publishable npm packages containing bundled TypeScript type definitions. Services consume these packages via standard package managers.
+
+---
+
+## Installation
+
+```bash
+# npm / yarn / pnpm
+npm install -g @kalutskii/contract
+
+# bun
+bun add -g @kalutskii/contract
+```
+
+Or run without installing:
+
+```bash
+bunx @kalutskii/contract <command>
+```
+
+> Requires `typescript >= 5.9` and `jiti >= 2.6` as peer dependencies.
+
+---
 
 ## What is a contract?
 
@@ -11,6 +33,8 @@ A contract is a versioned set of TypeScript type definitions that one service pu
 - **Service A** defines types for "API responses", "request models", etc.
 - **Service A** publishes a contract package `@company-contracts/service-a`
 - **Service B** installs and imports: `import type * as ServiceAContracts from '@company-contracts/service-a/api'`
+
+---
 
 ## Quick Start
 
@@ -143,6 +167,8 @@ bunx contract publish:package --prepare
 
 The `--prepare` flag will rebuild the package before publishing.
 
+---
+
 ## Configuration
 
 `contract.config.ts`:
@@ -176,6 +202,8 @@ export default contractConfig;
 - `package.exports` - (Optional) Custom export field configuration
 - `npm.token` - (Optional) NPM auth token used for publishing
 
+---
+
 ## Commands
 
 | Command                       | Purpose                                                   |
@@ -186,6 +214,8 @@ export default contractConfig;
 | `contract prepare:package`    | Generate publishable npm package directory                |
 | `contract pack:package`       | Pack prepared package into a `.tgz` archive               |
 | `contract publish:package`    | Publish package to npm using config/env token             |
+
+---
 
 ## Directory Structure
 
@@ -207,6 +237,8 @@ contract/
       └── types.d.ts
 ```
 
+---
+
 ## Consumer Usage
 
 After publishing your contract package, consumers install and import it:
@@ -220,6 +252,8 @@ const user: UserCreateRequest = {
   name: 'John Doe',
 };
 ```
+
+---
 
 ## Development Workflow
 
@@ -257,26 +291,79 @@ bun add @company-contracts/admin-service
 import type * as AdminAPI from '@company-contracts/admin-service/api';
 ```
 
-## Build System
-
-The project uses:
-
-- **tsup** - Bundle and generate TypeScript declarations
-- **dts-bundle-generator** - Bundle manifest files into single `.d.ts` files
-- **Bun** - Runtime
-- **Zod** - Config validation
-- **Clipanion** - CLI framework
+---
 
 ## Notes
 
 - This library is **local-only** — it does not perform remote synchronization or automatic publishing
-- Publishing uses a temporary `.npmrc` in `contract/package` from `config.npm.token`, `NPM_TOKEN`, or `NODE_AUTH_TOKEN` and removes it after publish attempt
+- Publishing uses a temporary `.npmrc` in `contract/package` from `config.npm.token`, `NPM_TOKEN`, or `NODE_AUTH_TOKEN` and removes it after the publish attempt
 - Contract manifests can export runtime values for contracts listed in `emit`
 - For `emit`, import or re-export from direct leaf files instead of barrels or service modules with broader dependency graphs
 - Use `contract update:environment` to regenerate missing files (e.g., after adding new contracts)
 - Versions are automatically managed based on content changes and npm registry state
 - Content hash is stored in `contract/.contract-package-state.json` for change detection
 - If npm version already exists, bump version manually via `contract prepare:package --bump ...`
+
+---
+
+## Contributing
+
+### Prerequisites
+
+- [Bun](https://bun.sh) >= 1.0
+- Node.js >= 20 (for tooling compatibility)
+
+### Setup
+
+```bash
+git clone https://github.com/kalutskii/contract.git
+cd contract
+bun install
+```
+
+### Scripts
+
+| Script              | Purpose                                  |
+| ------------------- | ---------------------------------------- |
+| `bun run build`     | Compile CLI and library via tsup         |
+| `bun run typecheck` | Run TypeScript compiler without emitting |
+| `bun run lint`      | Run ESLint across all TypeScript sources |
+
+### Project Layout
+
+```
+src/
+  adapters/       # CLI framework wiring (Clipanion)
+  environment/    # Config loading, validation, and env helpers
+  modules/
+    build/        # contract build command
+    init/         # contract init command
+    pack/         # contract pack:package command
+    prepare/      # contract prepare:package command
+    publish/      # contract publish:package command
+    versioning/   # Content hashing and semver bump logic
+  utilities/      # Shared utility functions
+cli.entrypoint.ts # CLI entry point
+index.ts          # Library public API
+```
+
+### Tech Stack
+
+- **tsup** — bundle and emit TypeScript declarations
+- **dts-bundle-generator** — bundle manifest files into single `.d.ts` files
+- **Bun** — runtime and package manager
+- **Clipanion** — CLI framework
+- **Zod** — config schema validation
+- **@clack/prompts** — interactive terminal prompts
+
+### Making Changes
+
+1. Edit source under `src/`
+2. Run `bun run typecheck` and `bun run lint` to validate
+3. Run `bun run build` to compile
+4. Test the CLI locally: `./dist/cli.entrypoint.js <command>`
+
+---
 
 ## License
 

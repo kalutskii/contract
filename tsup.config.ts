@@ -16,4 +16,5 @@ const tsupConfig = defineConfig({
   esbuildPlugins: [tsconfigPathsPlugin()],
   entry: ['index.ts', 'cli.entrypoint.ts'],
 });
+
 export default tsupConfig;
