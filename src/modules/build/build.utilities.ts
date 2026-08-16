@@ -8,7 +8,7 @@ export type ProjectPackageJSON = {
   peerDependencies?: Record<string, string>;
 };
 
-/** Collect bare package names that should stay external in emitted runtime bundles. */
+/** Collect bare package names that should stay external in generated bundles. */
 export async function getRuntimeExternalPackages(): Promise<string[]> {
   const packageJSONPath = path.join(process.cwd(), 'package.json');
 

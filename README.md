@@ -83,7 +83,7 @@ Keep `permissions.constants.ts` as a leaf runtime file with no unrelated runtime
 bunx contract build
 ```
 
-This bundles each manifest into a standalone `.d.ts` file using `dts-bundle-generator`.
+This bundles each manifest into a standalone `.d.ts` file using Rolldown and the native TypeScript 7 declaration generator.
 If a contract name is listed in `emit` inside `contract.config.ts`, the build also emits a runtime `.js` file for that manifest.
 
 For `emit` contracts, keep runtime exports narrow:
@@ -355,7 +355,7 @@ index.ts          # Library public API
 - **tsdown** — bundle and emit TypeScript declarations
 - **Oxlint** — type-aware static analysis
 - **oxfmt** — code and import formatting
-- **dts-bundle-generator** — bundle manifest files into single `.d.ts` files
+- **Rolldown** — bundle manifest files into single `.d.ts` files
 - **Bun** — runtime and package manager
 - **Clipanion** — CLI framework
 - **Zod** — config schema validation

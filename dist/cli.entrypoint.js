@@ -7,10 +7,11 @@ import { z } from "zod";
 import path from "path";
 import { pathToFileURL } from "url";
 import { build } from "esbuild";
-import { tsconfigPathsPlugin } from "esbuild-plugin-tsconfig-paths";
-import { execa } from "execa";
+import { rolldown } from "rolldown";
+import { dts } from "rolldown-plugin-dts";
 import { green } from "kleur/colors";
 import fs$1 from "fs/promises";
+import { execa } from "execa";
 import crypto from "crypto";
 //#region src/library.metadata.ts
 const packageMetadata = createRequire(import.meta.url)("../package.json");
@@ -253,66 +254,6 @@ async function updateConfigVersion(newVersion) {
 	await fs.writeFile(configPath, updatedContent, "utf-8");
 }
 //#endregion
-//#region src/utilities/execution.utilities.ts
-function createOutputBuffer() {
-	return {
-		stdout: "",
-		stderr: ""
-	};
-}
-function appendChunk(target, buffer, chunk) {
-	buffer[target] += String(chunk);
-}
-function attachOutputListeners(subprocess, buffer) {
-	subprocess.stdout?.on("data", (chunk) => appendChunk("stdout", buffer, chunk));
-	subprocess.stderr?.on("data", (chunk) => appendChunk("stderr", buffer, chunk));
-}
-function createFailedResult(buffer, error) {
-	return {
-		success: false,
-		stdout: buffer.stdout,
-		stderr: buffer.stderr,
-		errorMessage: error instanceof Error ? error.message : String(error)
-	};
-}
-function createSuccessResult(buffer) {
-	return {
-		success: true,
-		stdout: buffer.stdout,
-		stderr: buffer.stderr
-	};
-}
-/** Executes a shell command and returns collected stdout/stderr with status. */
-async function executeCommandWithResult(command, args, cwd) {
-	const output = createOutputBuffer();
-	try {
-		const subprocess = execa(command, args, {
-			stdio: [
-				"ignore",
-				"pipe",
-				"pipe"
-			],
-			shell: true,
-			cwd
-		});
-		attachOutputListeners(subprocess, output);
-		await subprocess;
-		return createSuccessResult(output);
-	} catch (error) {
-		return createFailedResult(output, error);
-	}
-}
-/** Executes a shell command and logs errors when the command fails. */
-async function executeCommand(command, args, cwd) {
-	const result = await executeCommandWithResult(command, args, cwd);
-	if (!result.success) {
-		const errorMessage = result.stderr || result.stdout || result.errorMessage || "Unknown error";
-		log.error(`Error executing command: ${command} ${args.join(" ")}\n${errorMessage}`);
-		return false;
-	}
-	return true;
-}
-//#endregion
 //#region src/modules/build/build.messages.ts
 /** Returns spinner text shown when declaration build starts. */
 const buildSpinnerStartedMessage = (contractsCount) => `Building ${green(String(contractsCount))} contract declaration(s)...`;
@@ -337,7 +278,7 @@ function resolveContractBundlePaths(app, contract) {
 }
 //#endregion
 //#region src/modules/build/build.utilities.ts
-/** Collect bare package names that should stay external in emitted runtime bundles. */
+/** Collect bare package names that should stay external in generated bundles. */
 async function getRuntimeExternalPackages() {
 	const packageJSONPath = path.join(process.cwd(), "package.json");
 	try {
@@ -358,13 +299,35 @@ async function getRuntimeExternalPackages() {
 /** Bundles a single contract manifest into a generated declaration file. */
 async function bundleContractDeclaration(app, contract) {
 	const paths = resolveContractBundlePaths(app, contract);
-	return executeCommand("npx", [
-		"dts-bundle-generator",
-		"-o",
-		paths.output,
-		paths.input,
-		"--no-check"
-	]);
+	const externalPackages = await getRuntimeExternalPackages();
+	const isExternalPackage = (id) => externalPackages.some((packageName) => id === packageName || packageName.endsWith("/*") && id.startsWith(packageName.slice(0, -1)));
+	try {
+		const bundle = await rolldown({
+			external: isExternalPackage,
+			input: paths.input,
+			logLevel: "silent",
+			plugins: [dts({
+				emitDtsOnly: true,
+				tsconfig: path.join(process.cwd(), "tsconfig.json")
+			})]
+		});
+		try {
+			const declaration = (await bundle.generate({
+				dir: path.dirname(paths.output),
+				entryFileNames: path.basename(paths.output),
+				format: "es"
+			})).output.find((output) => output.type === "chunk" && output.facadeModuleId?.endsWith(".d.ts"));
+			if (!declaration || declaration.type !== "chunk") throw new Error(`Failed to produce declaration output for ${paths.input}.`);
+			await fs$1.writeFile(paths.output, declaration.code);
+		} finally {
+			await bundle.close();
+		}
+		return true;
+	} catch (error) {
+		const errorMessage = error instanceof Error ? error.message : String(error);
+		fatalErrorWhileBundlingMessage(errorMessage);
+		return false;
+	}
 }
 /** Bundles a single contract manifest into a runtime JavaScript file. */
 async function bundleContractRuntime(app, contract) {
@@ -379,7 +342,6 @@ async function bundleContractRuntime(app, contract) {
 			logLevel: "silent",
 			outfile: paths.runtimeOutput,
 			platform: "neutral",
-			plugins: [tsconfigPathsPlugin()],
 			target: "esnext",
 			treeShaking: true,
 			tsconfig: path.join(process.cwd(), "tsconfig.json")
@@ -475,6 +437,66 @@ var UpdateEnvironmentCommand = class extends Command {
 		await updateContractEnvironment();
 	}
 };
+//#endregion
+//#region src/utilities/execution.utilities.ts
+function createOutputBuffer() {
+	return {
+		stdout: "",
+		stderr: ""
+	};
+}
+function appendChunk(target, buffer, chunk) {
+	buffer[target] += String(chunk);
+}
+function attachOutputListeners(subprocess, buffer) {
+	subprocess.stdout?.on("data", (chunk) => appendChunk("stdout", buffer, chunk));
+	subprocess.stderr?.on("data", (chunk) => appendChunk("stderr", buffer, chunk));
+}
+function createFailedResult(buffer, error) {
+	return {
+		success: false,
+		stdout: buffer.stdout,
+		stderr: buffer.stderr,
+		errorMessage: error instanceof Error ? error.message : String(error)
+	};
+}
+function createSuccessResult(buffer) {
+	return {
+		success: true,
+		stdout: buffer.stdout,
+		stderr: buffer.stderr
+	};
+}
+/** Executes a shell command and returns collected stdout/stderr with status. */
+async function executeCommandWithResult(command, args, cwd) {
+	const output = createOutputBuffer();
+	try {
+		const subprocess = execa(command, args, {
+			stdio: [
+				"ignore",
+				"pipe",
+				"pipe"
+			],
+			shell: true,
+			cwd
+		});
+		attachOutputListeners(subprocess, output);
+		await subprocess;
+		return createSuccessResult(output);
+	} catch (error) {
+		return createFailedResult(output, error);
+	}
+}
+/** Executes a shell command and logs errors when the command fails. */
+async function executeCommand(command, args, cwd) {
+	const result = await executeCommandWithResult(command, args, cwd);
+	if (!result.success) {
+		const errorMessage = result.stderr || result.stdout || result.errorMessage || "Unknown error";
+		log.error(`Error executing command: ${command} ${args.join(" ")}\n${errorMessage}`);
+		return false;
+	}
+	return true;
+}
 //#endregion
 //#region src/modules/pack/pack.messages.ts
 /** Returns spinner text when package packing starts. */
