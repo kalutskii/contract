@@ -1,7 +1,8 @@
 import fs from 'fs-extra';
-import path from 'path';
 
 import { CONTRACT_DIRECTORY_NAME } from '@/environment/environment.constants';
+
+import path from 'path';
 
 /** Filesystem paths needed by the pack flow. */
 interface PackPaths {

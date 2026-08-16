@@ -1,5 +1,4 @@
 import fs from 'fs-extra';
-import path from 'path';
 
 import { configFileCreationPrompt, environmentClearedMessage } from './environment.chat';
 import {
@@ -12,6 +11,8 @@ import { inspectContractEnvironment } from './environment.inspection';
 import { loadConfigFile } from './environment.loader';
 import { type Config, ConfigSchema, type EnvironmentStatus } from './environment.schemas';
 import { renderConfigTemplate, renderManifestTemplate } from './environment.templates';
+
+import path from 'path';
 
 /** Resolves the root directory for generated contract environment artifacts. */
 function getContractRootPath(): string {

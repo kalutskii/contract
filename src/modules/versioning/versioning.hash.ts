@@ -1,8 +1,9 @@
-import crypto from 'crypto';
 import fs from 'fs-extra';
-import path from 'path';
 
 import { PUBLISHABLE_FILES } from './versioning.constants';
+
+import crypto from 'crypto';
+import path from 'path';
 
 /** Adds contract declaration/stub files to the baseline file list. */
 function addContractFiles(contracts: string[]): string[] {

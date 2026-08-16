@@ -1,9 +1,10 @@
 import fs from 'fs-extra';
-import path from 'path';
-import { pathToFileURL } from 'url';
 
 import { configFileLoadFailedMessage, configFileNotFoundMessage, invalidConfigMessage } from './environment.chat';
 import { type Config, ConfigSchema } from './environment.schemas';
+
+import path from 'path';
+import { pathToFileURL } from 'url';
 
 interface ConfigModule {
   /** The default export of the config module, expected to match the Config schema. */

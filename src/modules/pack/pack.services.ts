@@ -1,5 +1,4 @@
 import { spinner } from '@clack/prompts';
-import path from 'path';
 
 import { executeCommand } from '@/utilities/execution.utilities';
 
@@ -13,6 +12,8 @@ import {
   packageJsonNotFoundMessage,
 } from './pack.messages';
 import { ensurePackPathsExist, findPackedArchive, resolvePackPaths } from './pack.validation';
+
+import path from 'path';
 
 /** Packs the prepared contract package directory into an npm tarball. */
 export async function packContractPackage(): Promise<void> {

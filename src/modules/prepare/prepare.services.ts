@@ -1,5 +1,3 @@
-import path from 'path';
-
 import { CONTRACT_DIRECTORY_NAME } from '@/environment/environment.constants';
 import type { Config } from '@/environment/environment.schemas';
 import { getContractState } from '@/modules/versioning/versioning.services';
@@ -14,6 +12,8 @@ import {
 } from './prepare.messages';
 import type { PrepareOptions } from './prepare.types';
 import { applyPrepareVersioning } from './prepare.versioning';
+
+import path from 'path';
 
 /** Returns a safe list of emitted contracts from config. */
 function getEmittedContracts(config: Config): string[] {
