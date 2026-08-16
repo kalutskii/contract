@@ -119,7 +119,7 @@ The command automatically bumps the patch version if the generated contract file
 
 - First run: stores a content hash, version unchanged
 - Content unchanged: version stays the same
-- Content changed: patch version bumps (e.g., `1.0.0 → 1.0.1`)
+- Content changed: patch version bumps (e.g., `1.0.1 → 1.0.2`)
 
 **Manual version overrides:**
 
