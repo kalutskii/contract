@@ -1,9 +1,10 @@
 import fs from 'fs-extra';
-import path from 'path';
 
 import { ENVIRONMENT_DIRECTORIES } from './environment.constants';
 import type { Config, EnvironmentStatus } from './environment.schemas';
 import { EnvironmentStatusSchema } from './environment.schemas';
+
+import path from 'path';
 
 /** Inspects current environment directories and manifests required by config. */
 export async function inspectContractEnvironment(

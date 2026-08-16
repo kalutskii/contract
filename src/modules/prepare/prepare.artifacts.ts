@@ -1,10 +1,11 @@
 import fs from 'fs-extra';
-import path from 'path';
 
 import { CONTRACT_DIRECTORY_NAME } from '@/environment/environment.constants';
 import type { Config } from '@/environment/environment.schemas';
 
 import type { PackageJsonWithVersion } from './prepare.types';
+
+import path from 'path';
 
 /** Resolves the generated declarations directory path. */
 function getGeneratedDirPath(): string {

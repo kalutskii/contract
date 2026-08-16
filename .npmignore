@@ -4,7 +4,6 @@ src/
 *.config.ts
 *.config.js
 node_modules/
-.eslint*
-.prettier*
+.ox*
 .npmrc
 tsconfig.json

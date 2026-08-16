@@ -323,11 +323,13 @@ bun install
 
 ### Scripts
 
-| Script              | Purpose                                  |
-| ------------------- | ---------------------------------------- |
-| `bun run build`     | Compile CLI and library via tsup         |
-| `bun run typecheck` | Run TypeScript compiler without emitting |
-| `bun run lint`      | Run ESLint across all TypeScript sources |
+| Script                 | Purpose                                         |
+| ---------------------- | ----------------------------------------------- |
+| `bun run build`        | Compile CLI and library via tsdown              |
+| `bun run typecheck`    | Run the native TypeScript compiler without emit |
+| `bun run lint`         | Run Oxlint across all TypeScript sources        |
+| `bun run format`       | Format supported project files with oxfmt       |
+| `bun run format:check` | Verify project formatting without writing       |
 
 ### Project Layout
 
@@ -349,7 +351,10 @@ index.ts          # Library public API
 
 ### Tech Stack
 
-- **tsup** — bundle and emit TypeScript declarations
+- **tsdown** — bundle and emit TypeScript declarations
+- **TypeScript 7** — native compiler used for type checking
+- **Oxlint** — type-aware static analysis
+- **oxfmt** — code and import formatting
 - **dts-bundle-generator** — bundle manifest files into single `.d.ts` files
 - **Bun** — runtime and package manager
 - **Clipanion** — CLI framework
@@ -359,7 +364,7 @@ index.ts          # Library public API
 ### Making Changes
 
 1. Edit source under `src/`
-2. Run `bun run typecheck` and `bun run lint` to validate
+2. Run `bun run typecheck`, `bun run lint`, and `bun run format:check` to validate
 3. Run `bun run build` to compile
 4. Test the CLI locally: `./dist/cli.entrypoint.js <command>`
 

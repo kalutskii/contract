@@ -28,7 +28,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .npmrc
 
 # caches
-.eslintcache
 .cache
 *.tsbuildinfo
 

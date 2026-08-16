@@ -1,12 +1,13 @@
 import { build } from 'esbuild';
 import { tsconfigPathsPlugin } from 'esbuild-plugin-tsconfig-paths';
-import path from 'path';
 
 import { executeCommand } from '@/utilities/execution.utilities';
 
 import { fatalErrorWhileBundlingMessage } from './build.messages';
 import { resolveContractBundlePaths } from './build.paths';
 import { getRuntimeExternalPackages } from './build.utilities';
+
+import path from 'path';
 
 /** Bundles a single contract manifest into a generated declaration file. */
 export async function bundleContractDeclaration(app: string, contract: string): Promise<boolean> {

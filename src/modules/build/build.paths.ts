@@ -1,6 +1,6 @@
-import path from 'path';
-
 import { CONTRACT_DIRECTORY_NAME } from '@/environment/environment.constants';
+
+import path from 'path';
 
 /** Input/output pair used to bundle a single contract declaration. */
 export interface ContractBundlePaths {

@@ -9,12 +9,11 @@ export function bumpVersion(currentVersion: string, bumpType: VersionBumpType): 
     parseInt(parts[2] ?? '0', 10),
   ];
 
-  switch (bumpType) {
-    case 'major':
-      return `${major + 1}.0.0`;
-    case 'minor':
-      return `${major}.${minor + 1}.0`;
-    case 'patch':
-      return `${major}.${minor}.${patch + 1}`;
-  }
+  const bumpedVersions = {
+    major: `${major + 1}.0.0`,
+    minor: `${major}.${minor + 1}.0`,
+    patch: `${major}.${minor}.${patch + 1}`,
+  } satisfies Record<VersionBumpType, string>;
+
+  return bumpedVersions[bumpType];
 }

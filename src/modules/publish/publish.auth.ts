@@ -1,9 +1,10 @@
 import fs from 'fs-extra';
-import path from 'path';
 
 import type { getConfig } from '@/environment/environment.services';
 
 import type { ResolvedNpmToken } from './publish.types';
+
+import path from 'path';
 
 /** Picks npm auth token from config first, then env fallbacks. */
 export function resolveNpmToken(config: Awaited<ReturnType<typeof getConfig>>): ResolvedNpmToken | null {

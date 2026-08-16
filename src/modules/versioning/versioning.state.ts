@@ -1,10 +1,11 @@
 import fs from 'fs-extra';
-import path from 'path';
 
 import { isRecord } from '@/utilities/type.utilities';
 
 import { CONTRACT_PACKAGE_STATE_FILE } from './versioning.constants';
 import type { ContractState } from './versioning.types';
+
+import path from 'path';
 
 /** Convert parsed JSON to a valid ContractState when possible. */
 function toContractState(value: unknown): ContractState | null {
