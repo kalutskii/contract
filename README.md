@@ -351,8 +351,8 @@ index.ts          # Library public API
 
 ### Tech Stack
 
-- **tsdown** — bundle and emit TypeScript declarations
 - **TypeScript 7** — native compiler used for type checking
+- **tsdown** — bundle and emit TypeScript declarations
 - **Oxlint** — type-aware static analysis
 - **oxfmt** — code and import formatting
 - **dts-bundle-generator** — bundle manifest files into single `.d.ts` files
