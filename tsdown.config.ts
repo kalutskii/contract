@@ -1,7 +1,7 @@
 import { defineConfig } from 'tsdown';
 
-// Tsdown configuration for building types.
-// More details: https://tsdown.dev/options
+// Tsdown configuration for building the package.
+// More details: https://tsdown.dev/options;
 
 const tsdownConfig = defineConfig({
   entry: ['index.ts', 'cli.entrypoint.ts'],
